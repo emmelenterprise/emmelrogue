@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue Race</title>
+  <link rel="stylesheet" href="lobby.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">EmmelRogue Race</h1>
+    <p class="subtitle">Zwei Spieler, ein Seed, ein Sieger</p>
+
+    <!-- Login Section (before Twitch auth) -->
+    <div id="login-section">
+      <div class="card login-card">
+        <button id="btn-twitch-login" class="btn btn-twitch">
+          <svg width="20" height="20" viewBox="0 0 256 268" fill="currentColor" style="margin-right: 8px;">
+            <path d="M17.458 0L0 46.556v186.201h63.983v34.934h34.931l34.898-34.934h52.36L256 162.954V0H17.458zm23.259 23.263H232.73v128.029l-40.739 40.523H128L93.113 226.79v-34.975H40.717V23.263zm64.008 116.405H128V69.844h-23.275v69.824zm63.997 0h23.27V69.844h-23.27v69.824z"/>
+          </svg>
+          Mit Twitch anmelden
+        </button>
+        <p class="login-hint">Verbinde dich mit Twitch um ein Race zu starten oder beizutreten</p>
+      </div>
+    </div>
+
+    <!-- User Info (after login) -->
+    <div id="user-info" class="hidden">
+      <div class="user-badge">
+        <img id="user-avatar" class="user-avatar" src="" alt="">
+        <span id="user-name" class="user-display-name"></span>
+        <button id="btn-logout" class="btn-icon" title="Abmelden">&#x2715;</button>
+      </div>
+    </div>
+
+    <!-- Create / Join Section (after login) -->
+    <div id="setup-section" class="hidden">
+      <div class="card">
+        <h2>Race erstellen</h2>
+        <div class="field">
+          <label>Starter-Modus</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="starter-mode" value="random" checked>
+              <span>Random (gleiche fuer beide)</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="starter-mode" value="free">
+              <span>Freie Wahl</span>
+            </label>
+          </div>
+        </div>
+        <button id="btn-create" class="btn btn-primary">Race erstellen</button>
+      </div>
+
+      <div class="divider">oder</div>
+
+      <div class="card">
+        <h2>Race beitreten</h2>
+        <div class="field">
+          <label for="join-code">Race-Code</label>
+          <input type="text" id="join-code" placeholder="ABCD" maxlength="4" autocomplete="off" style="text-transform: uppercase; letter-spacing: 0.3em; text-align: center; font-size: 1.5rem;">
+        </div>
+        <button id="btn-join" class="btn btn-secondary">Beitreten</button>
+      </div>
+    </div>
+
+    <!-- Lobby Section (shown after create/join) -->
+    <div id="lobby-section" class="hidden">
+      <div class="card lobby-card">
+        <div class="race-code-display">
+          <span class="label">Race-Code</span>
+          <span id="lobby-code" class="code">----</span>
+          <button id="btn-copy" class="btn-icon" title="Code kopieren">&#128203;</button>
+        </div>
+
+        <div class="starter-mode-display">
+          <span>Starter: </span>
+          <span id="lobby-starter-mode">Random</span>
+        </div>
+
+        <div class="players">
+          <div class="player-slot" id="player1-slot">
+            <div class="player-number">P1</div>
+            <img class="player-avatar" id="player1-avatar" src="" alt="">
+            <div class="player-name" id="player1-name">Warte...</div>
+            <div class="player-status" id="player1-status"></div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="player-slot" id="player2-slot">
+            <div class="player-number">P2</div>
+            <img class="player-avatar" id="player2-avatar" src="" alt="">
+            <div class="player-name" id="player2-name">Warte...</div>
+            <div class="player-status" id="player2-status"></div>
+          </div>
+        </div>
+
+        <div class="lobby-actions">
+          <button id="btn-start" class="btn btn-primary btn-large hidden">Race starten</button>
+          <button id="btn-leave" class="btn btn-danger">Verlassen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-bar" class="hidden">
+      <span id="status-text"></span>
+    </div>
+
+    <!-- Connection indicator -->
+    <div id="connection" class="connection disconnected">
+      <span class="dot"></span>
+      <span id="connection-text">Verbinde...</span>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="lobby.js"></script>
+</body>
+</html>

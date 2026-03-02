@@ -1,5 +1,6 @@
 import { pokerogueApi } from "#api/pokerogue-api";
 import { loggedInUser } from "#app/account";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { GameMode, getGameMode } from "#app/game-mode";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
@@ -38,6 +39,27 @@ export class TitlePhase extends Phase {
     globalScene.ui.clearText();
     globalScene.ui.fadeIn(250);
 
+    // Race mode autostart — skip title screen entirely
+    if (raceManager.isRaceMode()) {
+      console.log("[Race] Autostart — waiting for seed...");
+      globalScene.ui.showText("Warte auf Race-Start...", null);
+      raceManager.onSeedReceived((seed, starterMode) => {
+        console.log("[Race] Seed received:", seed, "starterMode:", starterMode);
+        globalScene.ui.clearText();
+        if (starterMode === "random") {
+          // Random starters: use daily-run style (seeded starters, no selection)
+          this.initRaceWithRandomStarters();
+        } else {
+          // Free choice: Classic mode with StarterSelect
+          this.gameMode = GameModes.CLASSIC;
+          globalScene.ui.setMode(UiMode.MESSAGE);
+          globalScene.ui.clearText();
+          this.end();
+        }
+      });
+      return;
+    }
+
     const now = new Date();
     if (now.getMonth() === 11 || (now.getMonth() === 0 && now.getDate() <= 15)) {
       globalScene.playBgm("winter_title", true);
@@ -47,6 +69,79 @@ export class TitlePhase extends Phase {
 
     const lastSlot = await this.checkLastSaveSlot();
     await this.showOptions(lastSlot);
+  }
+
+  /** Race mode with random starters — generates party from seed like daily run */
+  private initRaceWithRandomStarters(): void {
+    globalScene.phaseManager.clearPhaseQueue();
+    globalScene.sessionSlotId = 0;
+
+    const seed = raceManager.getSeed()!;
+    globalScene.gameMode = getGameMode(GameModes.CLASSIC);
+
+    globalScene.setSeed(seed);
+    globalScene.resetSeed();
+
+    globalScene.money = globalScene.gameMode.getStartingMoney();
+
+    const starters = getDailyRunStarters();
+    const startingLevel = globalScene.gameMode.getStartingLevel();
+
+    const party = globalScene.getPlayerParty();
+    const loadPokemonAssets: Promise<void>[] = [];
+    for (const starter of starters) {
+      const species = getPokemonSpecies(starter.speciesId);
+      const starterFormIndex = starter.formIndex;
+      const starterGender =
+        species.malePercent !== null ? (starter.female ? Gender.FEMALE : Gender.MALE) : Gender.GENDERLESS;
+      const starterPokemon = globalScene.addPlayerPokemon(
+        species,
+        startingLevel,
+        starter.abilityIndex,
+        starterFormIndex,
+        starterGender,
+        starter.shiny,
+        starter.variant,
+        starter.ivs,
+        starter.nature,
+      );
+      starterPokemon.setVisible(false);
+      if (starter.moveset) {
+        starterPokemon.tryPopulateMoveset(starter.moveset, true);
+      }
+      party.push(starterPokemon);
+      loadPokemonAssets.push(starterPokemon.loadAssets());
+    }
+
+    regenerateModifierPoolThresholds(party, ModifierPoolType.DAILY_STARTER);
+
+    const modifiers: Modifier[] = new Array(3)
+      .fill(null)
+      .map(() => modifierTypes.EXP_SHARE().withIdFromFunc(modifierTypes.EXP_SHARE).newModifier())
+      .concat(
+        new Array(3)
+          .fill(null)
+          .map(() => modifierTypes.GOLDEN_EXP_CHARM().withIdFromFunc(modifierTypes.GOLDEN_EXP_CHARM).newModifier()),
+      )
+      .concat(getDailyRunStarterModifiers(party))
+      .filter(m => m !== null);
+
+    for (const m of modifiers) {
+      globalScene.addModifier(m, true, false, false, true);
+    }
+    globalScene.updateModifiers(true, true);
+
+    Promise.all(loadPokemonAssets).then(() => {
+      globalScene.time.delayedCall(500, () => globalScene.playBgm());
+      globalScene.newArena(globalScene.gameMode.getStartingBiome());
+      globalScene.newBattle();
+      globalScene.arena.init();
+      globalScene.sessionPlayTime = 0;
+      globalScene.lastSavePlayTime = 0;
+      // Mark as loaded so end() treats it like a restored session (skips StarterSelect)
+      this.loaded = true;
+      this.end();
+    });
   }
 
   /**

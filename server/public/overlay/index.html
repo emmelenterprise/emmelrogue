@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue Race Overlay</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <!-- Layout: standard | mirrored | side-by-side | games-only -->
+  <div id="overlay" class="overlay layout-standard">
+
+    <!-- Race Info Header -->
+    <div class="race-header" id="race-header">
+      <span class="race-header-code" id="race-header-code"></span>
+      <span class="race-header-mode" id="race-header-mode"></span>
+    </div>
+
+    <!-- Finish Banner (hidden by default) -->
+    <div class="finish-banner hidden" id="finish-banner">
+      <div class="finish-text" id="finish-text">SPIELER GEWINNT!</div>
+      <div class="finish-sub" id="finish-sub"></div>
+    </div>
+
+    <div class="grid">
+      <!-- Quadrant 1: Top-Left -->
+      <div class="slot" id="slot-tl">
+        <video id="video-tl" autoplay playsinline muted></video>
+        <div class="slot-placeholder" id="placeholder-tl">
+          <div class="placeholder-name" id="name-tl">Spieler 1</div>
+          <div class="placeholder-sub">Cam</div>
+        </div>
+      </div>
+
+      <!-- Quadrant 2: Top-Right -->
+      <div class="slot" id="slot-tr">
+        <video id="video-tr" autoplay playsinline muted></video>
+        <div class="slot-placeholder" id="placeholder-tr">
+          <div class="placeholder-name" id="name-tr">Spieler 1</div>
+          <div class="placeholder-sub">Game</div>
+        </div>
+      </div>
+
+      <!-- Quadrant 3: Bottom-Left -->
+      <div class="slot" id="slot-bl">
+        <video id="video-bl" autoplay playsinline muted></video>
+        <div class="slot-placeholder" id="placeholder-bl">
+          <div class="placeholder-name" id="name-bl">Spieler 2</div>
+          <div class="placeholder-sub">Game</div>
+        </div>
+      </div>
+
+      <!-- Quadrant 4: Bottom-Right -->
+      <div class="slot" id="slot-br">
+        <video id="video-br" autoplay playsinline muted></video>
+        <div class="slot-placeholder" id="placeholder-br">
+          <div class="placeholder-name" id="name-br">Spieler 2</div>
+          <div class="placeholder-sub">Cam</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Race HUD -->
+    <div class="hud">
+      <div class="hud-player hud-p1">
+        <span class="hud-name" id="hud-name-p1">Spieler 1</span>
+        <span class="hud-wave" id="hud-wave-p1">Wave 0</span>
+        <span class="hud-status" id="hud-status-p1"></span>
+      </div>
+      <div class="hud-timer" id="hud-timer">00:00</div>
+      <div class="hud-player hud-p2">
+        <span class="hud-name" id="hud-name-p2">Spieler 2</span>
+        <span class="hud-wave" id="hud-wave-p2">Wave 0</span>
+        <span class="hud-status" id="hud-status-p2"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connection status (hidden in OBS, visible for debugging) -->
+  <div id="debug" class="debug hidden">
+    <span id="debug-text">Connecting...</span>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

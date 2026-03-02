@@ -1,0 +1,330 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #0a0a12;
+  --border: #2a2a45;
+  --neon: #a855f7;
+  --neon-glow: rgba(168, 85, 247, 0.5);
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #eab308;
+  --text: #e2e8f0;
+  --text-dim: #64748b;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+}
+
+.overlay {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Grid Layouts --- */
+.grid {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  min-height: 0;
+}
+
+/* Standard: Cam1 TL, Game1 TR, Game2 BL, Cam2 BR */
+.layout-standard .grid {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.layout-standard #slot-tl { grid-area: 1 / 1; }  /* Cam 1 */
+.layout-standard #slot-tr { grid-area: 1 / 2; }  /* Game 1 */
+.layout-standard #slot-bl { grid-area: 2 / 1; }  /* Game 2 */
+.layout-standard #slot-br { grid-area: 2 / 2; }  /* Cam 2 */
+
+/* Mirrored: Game1 TL, Cam1 TR, Cam2 BL, Game2 BR */
+.layout-mirrored .grid {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.layout-mirrored #slot-tl { grid-area: 1 / 1; }  /* Game 1 */
+.layout-mirrored #slot-tr { grid-area: 1 / 2; }  /* Cam 1 */
+.layout-mirrored #slot-bl { grid-area: 2 / 1; }  /* Cam 2 */
+.layout-mirrored #slot-br { grid-area: 2 / 2; }  /* Game 2 */
+
+/* Side by Side: Game1 left, Game2 right, Cams as small overlays */
+.layout-side-by-side .grid {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+.layout-side-by-side #slot-tl { /* Cam 1 overlay */
+  grid-area: 1 / 1;
+  position: absolute;
+  bottom: 60px;
+  left: 8px;
+  width: 180px;
+  height: 135px;
+  z-index: 10;
+  border: 2px solid var(--neon);
+  border-radius: 8px;
+}
+.layout-side-by-side #slot-tr { grid-area: 1 / 1; } /* Game 1 */
+.layout-side-by-side #slot-bl { grid-area: 1 / 2; } /* Game 2 */
+.layout-side-by-side #slot-br { /* Cam 2 overlay */
+  grid-area: 1 / 2;
+  position: absolute;
+  bottom: 60px;
+  right: 8px;
+  width: 180px;
+  height: 135px;
+  z-index: 10;
+  border: 2px solid var(--neon);
+  border-radius: 8px;
+}
+
+/* Games Only: No cams */
+.layout-games-only .grid {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+.layout-games-only #slot-tl { display: none; }  /* Cam 1 hidden */
+.layout-games-only #slot-tr { grid-area: 1 / 1; }  /* Game 1 */
+.layout-games-only #slot-bl { grid-area: 1 / 2; }  /* Game 2 */
+.layout-games-only #slot-br { display: none; }  /* Cam 2 hidden */
+
+/* --- Slot --- */
+.slot {
+  position: relative;
+  overflow: hidden;
+  background: #111;
+  border-radius: 4px;
+}
+
+.slot video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.slot-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 18, 0.9);
+  transition: opacity 0.3s;
+}
+
+.slot.has-stream .slot-placeholder {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.placeholder-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--neon);
+}
+
+.placeholder-sub {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 0.25rem;
+}
+
+/* --- HUD --- */
+.hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(10, 10, 18, 0.95);
+  border-top: 2px solid var(--border);
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.hud-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--neon);
+}
+
+.hud-wave {
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 600;
+  padding: 2px 8px;
+  background: rgba(168, 85, 247, 0.15);
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.hud-wave.ahead {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--green);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+.hud-wave.behind {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red);
+}
+
+.hud-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hud-status.defeated { color: var(--red); }
+.hud-status.victory { color: var(--green); }
+.hud-status.disconnected { color: var(--yellow); }
+
+.hud-timer {
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: var(--text);
+  letter-spacing: 0.05em;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* --- Debug --- */
+.debug {
+  position: fixed;
+  top: 4px;
+  left: 4px;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.7);
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 100;
+}
+
+/* --- Race Info Header --- */
+.race-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 6px 16px;
+  background: rgba(10, 10, 18, 0.95);
+  border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+}
+
+.race-header-code {
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: var(--neon);
+  letter-spacing: 0.1em;
+}
+
+.race-header-mode {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* --- Finish Banner --- */
+.finish-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 18, 0.85);
+  animation: finish-fade-in 0.5s ease-out;
+}
+
+.finish-text {
+  font-size: 3.5rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fff;
+  text-shadow:
+    0 0 20px var(--neon-glow),
+    0 0 40px var(--neon-glow),
+    0 0 80px var(--neon-glow);
+  animation: finish-glow 2s ease-in-out infinite alternate;
+}
+
+.finish-sub {
+  font-size: 1.2rem;
+  color: var(--text-dim);
+  margin-top: 12px;
+}
+
+@keyframes finish-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes finish-glow {
+  from {
+    text-shadow:
+      0 0 20px var(--neon-glow),
+      0 0 40px var(--neon-glow),
+      0 0 80px var(--neon-glow);
+  }
+  to {
+    text-shadow:
+      0 0 30px var(--neon),
+      0 0 60px var(--neon),
+      0 0 120px var(--neon);
+  }
+}
+
+/* --- Wave Update Pulse --- */
+.hud-wave.pulse {
+  animation: wave-pulse 0.6s ease-out;
+}
+
+@keyframes wave-pulse {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.3); background: rgba(168, 85, 247, 0.4); }
+  100% { transform: scale(1); }
+}
+
+/* --- Connecting State --- */
+.slot-placeholder.connecting .placeholder-name {
+  animation: connecting-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes connecting-blink {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.hidden {
+  display: none !important;
+}
