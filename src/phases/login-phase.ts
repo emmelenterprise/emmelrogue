@@ -1,8 +1,10 @@
 import { updateUserInfo } from "#app/account";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { globalScene } from "#app/global-scene";
 import { Phase } from "#app/phase";
 import { handleTutorial, Tutorial } from "#app/tutorial";
 import { bypassLogin } from "#constants/app-constants";
+import { PlayerGender } from "#enums/player-gender";
 import { UiMode } from "#enums/ui-mode";
 import { executeIf, sessionIdKey } from "#utils/common";
 import { getCookie, removeCookie } from "#utils/cookies";
@@ -53,6 +55,15 @@ export class LoginPhase extends Phase {
 
   public override async end(): Promise<void> {
     globalScene.ui.setMode(UiMode.MESSAGE);
+
+    // EmmelRogue: Skip gender selection + tutorial in race mode to avoid blocking TitlePhase
+    if (raceManager.isRaceMode()) {
+      if (!globalScene.gameData.gender) {
+        globalScene.gameData.gender = PlayerGender.MALE;
+      }
+      super.end();
+      return;
+    }
 
     if (!globalScene.gameData.gender) {
       globalScene.phaseManager.unshiftNew("SelectGenderPhase");

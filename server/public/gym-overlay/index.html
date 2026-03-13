@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue — Gym Overlay</title>
+  <link rel="stylesheet" href="gym-overlay.css">
+</head>
+<body>
+  <!-- Arena Entrance Sequence (fullscreen, hidden by default) -->
+  <div id="arena-sequence" class="arena-sequence hidden">
+    <div class="arena-bg">
+      <div class="arena-gate" id="arena-gate">
+        <div class="gate-left"></div>
+        <div class="gate-right"></div>
+      </div>
+      <div class="arena-floor"></div>
+    </div>
+    <div class="arena-content">
+      <!-- Step 1: Gate opens -->
+      <!-- Step 2: Challenger walks in -->
+      <div class="challenger-entrance" id="challenger-entrance">
+        <div class="trainer-sprite" id="seq-challenger-sprite"></div>
+        <div class="trainer-name" id="seq-challenger-name"></div>
+      </div>
+      <!-- Step 3: Teams shown -->
+      <div class="teams-reveal" id="teams-reveal">
+        <div class="team-side left">
+          <div class="team-label">Gym Leader</div>
+          <div class="team-icons" id="seq-boss-team"></div>
+        </div>
+        <div class="vs-badge">VS</div>
+        <div class="team-side right">
+          <div class="team-label" id="seq-challenger-label">Challenger</div>
+          <div class="team-icons" id="seq-challenger-team"></div>
+        </div>
+      </div>
+      <!-- Step 4: Trainer line -->
+      <div class="trainer-line-box" id="trainer-line-box">
+        <div class="line-text" id="seq-trainer-line"></div>
+      </div>
+      <!-- Step 5: FIGHT! -->
+      <div class="fight-text" id="fight-text">KAMPF!</div>
+    </div>
+  </div>
+
+  <!-- Persistent Overlay (always visible) -->
+  <div id="overlay">
+    <!-- Current Battle -->
+    <div id="current-battle" class="battle-bar hidden">
+      <div class="battle-label">AKTUELLER KAMPF</div>
+      <div class="battle-info">
+        <div class="fighter boss">
+          <div class="fighter-sprite" id="ov-boss-sprite"></div>
+          <span class="fighter-name">Gym Leader</span>
+        </div>
+        <div class="vs">VS</div>
+        <div class="fighter challenger">
+          <div class="fighter-sprite" id="ov-challenger-sprite"></div>
+          <span class="fighter-name" id="ov-challenger-name">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queue -->
+    <div id="queue-bar" class="queue-bar">
+      <div class="queue-label">WARTESCHLANGE</div>
+      <div id="queue-items" class="queue-items"></div>
+    </div>
+
+    <!-- Badge Alert -->
+    <div id="badge-alert" class="badge-alert hidden">
+      <div class="badge-icon">🏅</div>
+      <div class="badge-text">
+        <span id="badge-winner-name"></span> hat einen <strong>Badge</strong> gewonnen!
+      </div>
+    </div>
+
+    <!-- Leaderboard (bottom corner) -->
+    <div id="leaderboard" class="leaderboard-box">
+      <div class="lb-label">TOP BADGES</div>
+      <div id="lb-items" class="lb-items"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="gym-overlay.js"></script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue — Community Trainer Editor</title>
+  <link rel="stylesheet" href="community.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div class="header-left">
+        <h1>EmmelRogue</h1>
+        <span class="subtitle">COMMUNITY TRAINER EDITOR</span>
+      </div>
+      <div class="header-center" id="session-info" style="display:none">
+        <span class="info-badge">Welle <strong id="current-wave">0</strong></span>
+        <span class="info-badge"><span id="current-biome">—</span></span>
+        <span class="info-badge code-badge" id="session-code-badge" title="Session-Code">CODE: <strong id="session-code">—</strong></span>
+      </div>
+      <div class="header-right">
+        <div id="user-info" style="display:none">
+          <img id="user-avatar" src="" alt="Avatar" class="avatar">
+          <span id="user-name"></span>
+          <button id="btn-logout" class="btn btn-small">Logout</button>
+        </div>
+        <button id="btn-login" class="btn btn-twitch">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+          Twitch Login
+        </button>
+      </div>
+    </header>
+
+    <!-- Join / No Session State -->
+    <div id="no-session" class="center-message">
+      <h2>EmmelRogue Community</h2>
+      <div class="join-section">
+        <p>Code eingeben um beizutreten:</p>
+        <div class="code-input-row">
+          <input type="text" id="join-code" maxlength="4" placeholder="XXXX" autocomplete="off">
+          <button id="btn-join-code" class="btn btn-accent">Beitreten</button>
+        </div>
+        <div id="join-error" class="error-text" style="display:none"></div>
+      </div>
+      <div class="join-divider"><span>oder</span></div>
+      <div id="auto-search">
+        <p class="muted">Suche aktive Session...</p>
+        <div class="spinner"></div>
+      </div>
+      <!-- Streamer: manually create session -->
+      <div id="streamer-create" style="display:none">
+        <button id="btn-create-session" class="btn btn-accent">Session starten</button>
+        <p class="muted">Startet eine neue Community-Session</p>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="main-content" style="display:none">
+      <!-- Streamer Team -->
+      <section id="team-section">
+        <h2>Emmel's Team</h2>
+        <div id="streamer-party" class="streamer-party"></div>
+      </section>
+
+      <!-- Trainer Grid -->
+      <section id="trainer-section">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
+          <h2 style="margin:0;">Trainer zum Claimen</h2>
+          <button id="btn-insert-trainer" class="btn btn-small btn-accent" style="display:none;">+ Custom Trainer</button>
+        </div>
+        <div id="trainer-grid" class="trainer-grid"></div>
+        <p id="no-trainers" class="muted" style="text-align:center; padding:2rem;">Noch keine Trainer gemeldet. Warte auf den nächsten Kampf...</p>
+      </section>
+
+      <!-- Voting Section -->
+      <section id="vote-section" style="display:none">
+        <h2>Abstimmung</h2>
+        <div id="vote-container"></div>
+      </section>
+
+      <!-- Active Gimmicks -->
+      <section id="gimmick-section" style="display:none">
+        <h2>Aktive Gimmicks</h2>
+        <div id="gimmick-bar"></div>
+      </section>
+    </main>
+
+    <!-- Streamer Config Panel -->
+    <div id="config-panel" style="display:none">
+      <div class="config-header">
+        <h3>Streamer Config</h3>
+        <button id="btn-close-config" class="btn btn-small">X</button>
+      </div>
+      <div class="config-body">
+        <label class="toggle-row">
+          <span>Feature aktiv</span>
+          <input type="checkbox" id="cfg-enabled" checked>
+        </label>
+        <label class="toggle-row">
+          <span>Custom Trainer erlauben</span>
+          <input type="checkbox" id="cfg-custom-trainers" checked>
+        </label>
+        <label class="toggle-row">
+          <span>Shiny erlauben</span>
+          <input type="checkbox" id="cfg-shiny">
+        </label>
+        <label class="toggle-row">
+          <span>Surprise Modus</span>
+          <input type="checkbox" id="cfg-surprise">
+        </label>
+        <p class="muted" style="font-size:0.7rem; margin:-6px 0 6px;">Versteckt Pokemon &amp; Namen bis zum Kampf</p>
+        <label class="config-row">
+          <span>Claim Modus</span>
+          <select id="cfg-claim-mode">
+            <option value="free_for_all">Free for All</option>
+            <option value="one_per_person">Einer pro Person</option>
+            <option value="limit_per_person">Limit pro Person</option>
+          </select>
+        </label>
+        <label class="config-row" id="cfg-max-claims-row" style="display:none">
+          <span>Max Claims / Person</span>
+          <input type="number" id="cfg-max-claims" value="3" min="1" max="50">
+        </label>
+        <label class="config-row">
+          <span>Wave Buffer</span>
+          <input type="number" id="cfg-wave-buffer" value="2" min="0" max="10">
+        </label>
+        <hr>
+        <h4>Trainer-Kosten (Trigger)</h4>
+        <p class="muted" style="font-size:0.75rem; margin:0 0 0.5rem">Legt fest was User brauchen um Trainer zu claimen. "Kostenlos" = jeder kann. Credits kommen von echten Twitch-Events (Bits/Subs/etc).</p>
+        <div id="trigger-editor"></div>
+        <hr>
+        <h4>Vote starten</h4>
+        <div id="vote-options-config"></div>
+        <label class="config-row">
+          <span>Dauer (Sek)</span>
+          <input type="number" id="cfg-vote-duration" value="60" min="10" max="300">
+        </label>
+        <button id="btn-start-vote" class="btn btn-accent">Vote starten</button>
+        <hr>
+        <h4>Gimmick aktivieren</h4>
+        <select id="cfg-gimmick-select">
+          <option value="double_10">10 Doppelkämpfe</option>
+          <option value="trainer_only">Nur Trainer-Kämpfe</option>
+          <option value="shiny_wave">Alle Shinys</option>
+          <option value="level_boost">Gegner +10 Level</option>
+          <option value="item_rain">Doppelte Items</option>
+        </select>
+        <button id="btn-activate-gimmick" class="btn btn-accent">Aktivieren</button>
+      </div>
+    </div>
+
+    <button id="btn-config" style="display:none" class="btn btn-config" title="Streamer Config">&#9881;</button>
+
+    <!-- Team Editor Modal -->
+    <div id="team-modal" class="modal" style="display:none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Team bearbeiten — Welle <span id="modal-wave">0</span></h3>
+          <button id="btn-close-modal" class="btn btn-small">X</button>
+        </div>
+        <div class="modal-body">
+          <div class="budget-bar">
+            <span>Budget: <span id="budget-current">0</span> / <span id="budget-max">0</span></span>
+            <div class="budget-fill" id="budget-fill"></div>
+          </div>
+          <div id="party-slots"></div>
+          <div class="pokemon-search">
+            <input type="text" id="pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+            <div id="pokemon-suggestions" class="suggestions" style="display:none"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-save-team" class="btn btn-accent">Speichern</button>
+          <button id="btn-cancel-team" class="btn">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Insert Custom Trainer Modal -->
+    <div id="insert-modal" class="modal" style="display:none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Custom Trainer einfügen</h3>
+          <button id="btn-close-insert" class="btn btn-small">X</button>
+        </div>
+        <div class="modal-body">
+          <div class="field" style="margin-bottom:1rem;">
+            <label>Welle (Wild-Encounter wird zu Trainer)</label>
+            <input type="number" id="insert-wave" min="1" max="200" placeholder="z.B. 7" autocomplete="off" style="width:100px; text-align:center; font-size:1.2rem;">
+            <span id="insert-wave-info" class="muted" style="margin-left:0.5rem;"></span>
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; margin-bottom:0.75rem; cursor:pointer;">
+            <input type="checkbox" id="insert-anon" checked>
+            <span>Als ??? anzeigen (anonym)</span>
+          </label>
+          <div class="budget-bar">
+            <span>Budget: <span id="insert-budget-current">0</span> / <span id="insert-budget-max">0</span></span>
+            <div class="budget-fill" id="insert-budget-fill"></div>
+          </div>
+          <div id="insert-party-slots"></div>
+          <div class="pokemon-search">
+            <input type="text" id="insert-pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+            <div id="insert-pokemon-suggestions" class="suggestions" style="display:none"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-save-insert" class="btn btn-accent">Trainer erstellen</button>
+          <button id="btn-cancel-insert" class="btn">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sprite Selector Modal -->
+    <div id="sprite-modal" class="modal" style="display:none">
+      <div class="modal-content" style="max-width:700px">
+        <div class="modal-header">
+          <h3 id="sprite-modal-title">Sprite wählen</h3>
+          <span style="margin-left:auto; margin-right:8px; color:var(--text-muted)">Welle <span id="sprite-modal-wave">0</span></span>
+          <button id="btn-close-sprite" class="btn btn-small">X</button>
+        </div>
+        <div class="modal-body">
+          <div id="sprite-modal-anon-row" style="display:none; align-items:center; gap:8px; margin-bottom:12px; padding:8px 12px; background:var(--bg-card); border-radius:6px;">
+            <label for="sprite-modal-anon" style="cursor:pointer; display:flex; align-items:center; gap:6px; margin:0;">
+              <input type="checkbox" id="sprite-modal-anon">
+              <span>Als ??? anzeigen</span>
+            </label>
+            <button id="sprite-modal-skip" class="btn btn-small" onclick="claimSkipSprite()" style="margin-left:auto;">Ohne Sprite claimen</button>
+          </div>
+          <input type="text" id="sprite-search" placeholder="Sprite suchen..." autocomplete="off" style="width:100%; margin-bottom:12px;">
+          <div id="sprite-grid" class="sprite-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Share/Link bar at bottom -->
+    <div id="share-bar" style="display:none">
+      <span>Teile diesen Link:</span>
+      <input type="text" id="share-url" readonly>
+      <button id="btn-copy-url" class="btn btn-small" title="URL kopieren">Kopieren</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="community.js"></script>
+</body>
+</html>

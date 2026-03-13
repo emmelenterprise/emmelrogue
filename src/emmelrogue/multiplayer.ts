@@ -1,14 +1,20 @@
 import { io, type Socket } from "socket.io-client";
 import { raceManager } from "./race-manager";
+import { chatTrainers } from "./chat-trainers";
+import { pvpBattle } from "./pvp-battle";
 
 const PREFIX = "[EmmelRogue]";
 
 let socket: Socket | null = null;
 
 export function connect(): void {
-  if (socket?.connected) {
+  // Don't create a new socket if one already exists (even if still connecting)
+  if (socket) {
+    console.log(`${PREFIX} Socket already exists (connected=${socket.connected}), skipping`);
     return;
   }
+
+  console.log(`${PREFIX} Creating socket connection...`);
 
   // Relative URL — works with both dev server and production proxy
   socket = io({
@@ -25,11 +31,19 @@ export function connect(): void {
 
     // Initialize race mode after socket connects
     raceManager.init();
+
+    // Initialize chat trainers
+    chatTrainers.init();
+
+    // Initialize PvP battle
+    pvpBattle.init();
   });
 
   socket.io.on("reconnect", () => {
     console.log(`${PREFIX} Reconnected to server`);
     raceManager.handleReconnect();
+    chatTrainers.handleReconnect();
+    pvpBattle.handleReconnect();
   });
 
   socket.on("PONG", (data: { timestamp: number }) => {

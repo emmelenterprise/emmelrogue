@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue Layout Editor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    h1 { font-size: 1.2rem; color: #a855f7; margin-bottom: 0.5rem; }
+    h2 { font-size: 0.95rem; color: #888; margin: 0.8rem 0 0.4rem; }
+
+    .top-bar {
+      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .top-bar input {
+      background: #1a1a2e; border: 1px solid #333; color: #fff;
+      padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 1.1rem;
+      text-transform: uppercase; letter-spacing: 0.2em; width: 6rem; text-align: center;
+    }
+    .top-bar button {
+      background: #a855f7; color: #fff; border: none; padding: 0.4rem 1rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+    }
+    .top-bar button:hover { background: #9333ea; }
+    .status {
+      font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 4px;
+    }
+    .status.connected { background: #16a34a33; color: #4ade80; }
+    .status.disconnected { background: #dc262633; color: #f87171; }
+
+    .controls {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem;
+      max-width: 800px;
+    }
+    @media (max-width: 700px) { .controls { grid-template-columns: 1fr; } }
+
+    .control-row {
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .control-row label {
+      font-size: 0.8rem; color: #aaa; min-width: 100px; flex-shrink: 0;
+    }
+    .control-row input[type="range"] {
+      flex: 1; accent-color: #a855f7;
+    }
+    .val {
+      background: #1a1a2e; border: 1px solid #333; color: #fff;
+      width: 55px; text-align: center; padding: 0.2rem; border-radius: 4px;
+      font-size: 0.8rem;
+    }
+    .section { grid-column: 1 / -1; }
+    .checkbox-row {
+      display: flex; gap: 1rem; align-items: center;
+      font-size: 0.85rem; grid-column: 1 / -1;
+    }
+    .checkbox-row label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+    select {
+      background: #1a1a2e; border: 1px solid #333; color: #fff;
+      padding: 0.3rem; border-radius: 4px; font-size: 0.8rem;
+    }
+    .hint { font-size: 0.7rem; color: #666; grid-column: 1 / -1; margin-top: -0.2rem; }
+  </style>
+</head>
+<body>
+  <h1>EmmelRogue Live Layout Editor</h1>
+
+  <div class="top-bar">
+    <input type="text" id="race-code" placeholder="CODE" maxlength="4" autocomplete="off">
+    <button id="btn-connect">Verbinden</button>
+    <span class="status disconnected" id="status">Nicht verbunden</span>
+  </div>
+
+  <div class="controls">
+    <div class="section"><h2>Layout</h2></div>
+
+    <div class="control-row" style="grid-column: 1 / -1;">
+      <label>Anordnung</label>
+      <select id="layout-select">
+        <option value="CG-CG">Cam Links | Cam Links</option>
+        <option value="GC-GC">Cam Rechts | Cam Rechts</option>
+        <option value="CG-GC">Cam Links | Cam Rechts</option>
+        <option value="GC-CG">Cam Rechts | Cam Links</option>
+        <optgroup label="Mit Community Panel">
+          <option value="CGT-CGT">C G T | C G T</option>
+          <option value="TCG-TCG">T C G | T C G</option>
+          <option value="GT-GT">G T | G T (ohne Cam)</option>
+          <option value="TG-TG">T G | T G (ohne Cam)</option>
+          <option value="CGT-GCT">C G T | G C T</option>
+          <option value="CGT-TGC" selected>C G T | T G C</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="section"><h2>Kamera & Community</h2></div>
+    <div class="checkbox-row">
+      <label><input type="checkbox" id="coupling-enabled" checked> Kopplung (Summe = 960px)</label>
+    </div>
+
+    <div class="control-row">
+      <label>Cam-Breite</label>
+      <input type="range" id="cam-w" min="0" max="960" value="680" step="10">
+      <input type="number" class="val" id="cam-w-val" value="680">
+    </div>
+    <div class="control-row">
+      <label>Community-Breite</label>
+      <input type="range" id="com-w" min="0" max="960" value="350" step="10">
+      <input type="number" class="val" id="com-w-val" value="350">
+    </div>
+    <div class="control-row">
+      <label>Cam-Zoom</label>
+      <input type="range" id="cam-zoom" min="50" max="300" value="100" step="10">
+      <input type="number" class="val" id="cam-zoom-val" value="100">
+    </div>
+
+    <div class="section"><h2>Game 1 (oben)</h2></div>
+    <div class="control-row">
+      <label>X-Offset</label>
+      <input type="range" id="g1x" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="g1x-val" value="0">
+    </div>
+    <div class="control-row">
+      <label>Y-Offset</label>
+      <input type="range" id="g1y" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="g1y-val" value="0">
+    </div>
+
+    <div class="section"><h2>Game 2 (unten)</h2></div>
+    <div class="control-row">
+      <label>X-Offset</label>
+      <input type="range" id="g2x" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="g2x-val" value="0">
+    </div>
+    <div class="control-row">
+      <label>Y-Offset</label>
+      <input type="range" id="g2y" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="g2y-val" value="0">
+    </div>
+
+    <div class="section"><h2>Community 1 (oben)</h2></div>
+    <div class="control-row">
+      <label>X-Offset</label>
+      <input type="range" id="t1x" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="t1x-val" value="0">
+    </div>
+    <div class="control-row">
+      <label>Y-Offset</label>
+      <input type="range" id="t1y" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="t1y-val" value="0">
+    </div>
+
+    <div class="section"><h2>Community 2 (unten)</h2></div>
+    <div class="control-row">
+      <label>X-Offset</label>
+      <input type="range" id="t2x" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="t2x-val" value="0">
+    </div>
+    <div class="control-row">
+      <label>Y-Offset</label>
+      <input type="range" id="t2y" min="-400" max="400" value="0" step="5">
+      <input type="number" class="val" id="t2y-val" value="0">
+    </div>
+
+    <div class="section"><h2>Solo-Modus</h2></div>
+    <div class="control-row">
+      <label>Game-Split %</label>
+      <input type="range" id="game-split" min="30" max="90" value="67" step="1">
+      <input type="number" class="val" id="game-split-val" value="67">
+    </div>
+    <div class="hint">Wie viel % der rechten Seite das Game einnimmt (Rest = Community Panel)</div>
+    <div class="checkbox-row">
+      <label><input type="checkbox" id="chat-enabled" checked> Chat-Bereich unter Cam</label>
+    </div>
+
+    <div class="section"><h2>Community Widget</h2></div>
+    <div class="checkbox-row">
+      <label><input type="checkbox" id="com-header-hidden" checked> Code/Wave-Zeile ausblenden</label>
+    </div>
+    <div class="control-row">
+      <label>Pokemon Icons</label>
+      <input type="range" id="com-ball-w" min="20" max="80" value="80" step="2">
+      <input type="number" class="val" id="com-ball-w-val" value="80">
+    </div>
+    <div class="control-row">
+      <label>Text-Skalierung</label>
+      <input type="range" id="com-fs-scale" min="50" max="200" value="170" step="5">
+      <input type="number" class="val" id="com-fs-scale-val" value="170">
+    </div>
+    <div class="control-row">
+      <label>Party-Spalten</label>
+      <input type="range" id="com-party-cols" min="2" max="6" value="6" step="1">
+      <input type="number" class="val" id="com-party-cols-val" value="6">
+    </div>
+    <div class="control-row">
+      <label>Party-Abstand</label>
+      <input type="range" id="com-party-gap" min="0" max="16" value="16" step="1">
+      <input type="number" class="val" id="com-party-gap-val" value="16">
+    </div>
+    <div class="control-row">
+      <label>Padding</label>
+      <input type="range" id="com-pad" min="0" max="24" value="9" step="1">
+      <input type="number" class="val" id="com-pad-val" value="9">
+    </div>
+
+    <div class="section"><h2>Sichtbarkeit</h2></div>
+    <div class="checkbox-row">
+      <label><input type="checkbox" id="hud-enabled" checked> Wave-HUD</label>
+      <label><input type="checkbox" id="timer-enabled"> Timer</label>
+    </div>
+
+    <div class="section"><h2>Einstellungen</h2></div>
+    <div style="display:flex; gap:0.5rem;">
+      <button id="btn-copy-settings" style="background:#a855f7;color:#fff;border:none;padding:0.4rem 1rem;border-radius:6px;cursor:pointer;font-size:0.85rem;">Kopieren</button>
+      <button id="btn-load-settings" style="background:#333;color:#fff;border:1px solid #555;padding:0.4rem 1rem;border-radius:6px;cursor:pointer;font-size:0.85rem;">Einfuegen</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io({ transports: ['websocket', 'polling'] });
+    const statusEl = document.getElementById('status');
+    const codeInput = document.getElementById('race-code');
+    let raceCode = null;
+
+    // Restore from URL or sessionStorage
+    const urlCode = new URLSearchParams(window.location.search).get('code');
+    if (urlCode) codeInput.value = urlCode.toUpperCase();
+
+    socket.on('connect', () => {
+      statusEl.textContent = 'Socket verbunden';
+      statusEl.className = 'status connected';
+      if (raceCode) joinRace(raceCode);
+    });
+    socket.on('disconnect', () => {
+      statusEl.textContent = 'Getrennt';
+      statusEl.className = 'status disconnected';
+    });
+    socket.on('RACE_STATE', (state) => {
+      statusEl.textContent = `Race ${state.code} (${state.status})`;
+      statusEl.className = 'status connected';
+    });
+
+    document.getElementById('btn-connect').addEventListener('click', () => {
+      const code = codeInput.value.trim().toUpperCase();
+      if (code.length !== 4) return;
+      joinRace(code);
+    });
+    codeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-connect').click();
+    });
+
+    function joinRace(code) {
+      raceCode = code;
+      socket.emit('LAYOUT_EDITOR_JOIN', { code });
+      history.replaceState(null, '', '?code=' + code);
+    }
+
+    // Cam <-> Community coupling (game = 960px)
+    const REMAINING = 960;
+    let _coupling = false;
+
+    function sendUpdate(data) {
+      if (!raceCode) return;
+      socket.emit('LAYOUT_UPDATE', { code: raceCode, ...data });
+    }
+
+    function linkSlider(sliderId, valId, key, onChange) {
+      const slider = document.getElementById(sliderId);
+      const val = document.getElementById(valId);
+      slider.addEventListener('input', () => {
+        val.value = slider.value;
+        if (onChange) onChange(parseInt(slider.value));
+        sendUpdate({ [key]: slider.value });
+      });
+      val.addEventListener('change', () => {
+        let v = parseInt(val.value) || 0;
+        v = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), v));
+        val.value = v;
+        slider.value = v;
+        if (onChange) onChange(v);
+        sendUpdate({ [key]: String(v) });
+      });
+    }
+
+    function applyCoupling(changedIsCam) {
+      if (_coupling || !document.getElementById('coupling-enabled').checked) return;
+      _coupling = true;
+      if (changedIsCam) {
+        const camW = parseInt(document.getElementById('cam-w').value) || 0;
+        const newComW = Math.max(0, REMAINING - camW);
+        document.getElementById('com-w').value = newComW;
+        document.getElementById('com-w-val').value = newComW;
+        sendUpdate({ comW: String(newComW) });
+      } else {
+        const comW = parseInt(document.getElementById('com-w').value) || 0;
+        const newCamW = Math.max(0, REMAINING - comW);
+        document.getElementById('cam-w').value = newCamW;
+        document.getElementById('cam-w-val').value = newCamW;
+        sendUpdate({ camW: String(newCamW) });
+      }
+      _coupling = false;
+    }
+
+    // Layout select → forward to overlay
+    document.getElementById('layout-select').addEventListener('change', (e) => {
+      sendUpdate({ layout: e.target.value });
+    });
+
+    // Link all sliders
+    linkSlider('cam-w', 'cam-w-val', 'camW', () => applyCoupling(true));
+    linkSlider('com-w', 'com-w-val', 'comW', () => applyCoupling(false));
+    linkSlider('cam-zoom', 'cam-zoom-val', 'camZoom');
+    linkSlider('g1x', 'g1x-val', 'g1x');
+    linkSlider('g1y', 'g1y-val', 'g1y');
+    linkSlider('g2x', 'g2x-val', 'g2x');
+    linkSlider('g2y', 'g2y-val', 'g2y');
+    linkSlider('t1x', 't1x-val', 't1x');
+    linkSlider('t1y', 't1y-val', 't1y');
+    linkSlider('t2x', 't2x-val', 't2x');
+    linkSlider('t2y', 't2y-val', 't2y');
+    linkSlider('game-split', 'game-split-val', 'gameSplit');
+
+    document.getElementById('chat-enabled').addEventListener('change', (e) => {
+      sendUpdate({ chat: e.target.checked ? '1' : '0' });
+    });
+
+    // Community widget style sliders
+    function sendComStyle() {
+      const ballW = document.getElementById('com-ball-w').value;
+      const fsScale = document.getElementById('com-fs-scale').value;
+      const partyCols = document.getElementById('com-party-cols').value;
+      const partyGap = document.getElementById('com-party-gap').value;
+      const pad = document.getElementById('com-pad').value;
+      sendUpdate({
+        comStyle: {
+          '--ball-w': ballW + 'px',
+          '--ball-h': Math.round(parseInt(ballW) * 0.9) + 'px',
+          '--fs-scale': String(parseInt(fsScale) / 100),
+          '--party-gap': partyGap + 'px',
+          '--overlay-pad': pad + 'px',
+          '--party-cols': partyCols,
+        },
+      });
+    }
+
+    for (const id of ['com-ball-w', 'com-fs-scale', 'com-party-cols', 'com-party-gap', 'com-pad']) {
+      const slider = document.getElementById(id);
+      const val = document.getElementById(id + '-val');
+      slider.addEventListener('input', () => { val.value = slider.value; sendComStyle(); });
+      val.addEventListener('change', () => {
+        let v = parseInt(val.value) || 0;
+        v = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), v));
+        val.value = v; slider.value = v; sendComStyle();
+      });
+    }
+
+    // Checkboxes
+    document.getElementById('hud-enabled').addEventListener('change', (e) => {
+      sendUpdate({ hud: e.target.checked ? '1' : '0' });
+    });
+    document.getElementById('timer-enabled').addEventListener('change', (e) => {
+      sendUpdate({ timer: e.target.checked ? '1' : '0' });
+    });
+    document.getElementById('com-header-hidden').addEventListener('change', (e) => {
+      sendUpdate({ comHeader: e.target.checked ? '0' : '1' });
+    });
+
+    // Auto-uppercase
+    codeInput.addEventListener('input', () => {
+      codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    // Copy/Load settings
+    function getCurrentSettings() {
+      return {
+        layout: document.getElementById('layout-select').value,
+        camW: document.getElementById('cam-w').value,
+        comW: document.getElementById('com-w').value,
+        camZoom: document.getElementById('cam-zoom').value,
+        g1x: document.getElementById('g1x').value,
+        g1y: document.getElementById('g1y').value,
+        g2x: document.getElementById('g2x').value,
+        g2y: document.getElementById('g2y').value,
+        t1x: document.getElementById('t1x').value,
+        t1y: document.getElementById('t1y').value,
+        t2x: document.getElementById('t2x').value,
+        t2y: document.getElementById('t2y').value,
+        gameSplit: document.getElementById('game-split').value,
+        chat: document.getElementById('chat-enabled').checked,
+        comBallW: document.getElementById('com-ball-w').value,
+        comFsScale: document.getElementById('com-fs-scale').value,
+        comPartyCols: document.getElementById('com-party-cols').value,
+        comPartyGap: document.getElementById('com-party-gap').value,
+        comPad: document.getElementById('com-pad').value,
+        hud: document.getElementById('hud-enabled').checked,
+        timer: document.getElementById('timer-enabled').checked,
+        coupling: document.getElementById('coupling-enabled').checked,
+        comHeaderHidden: document.getElementById('com-header-hidden').checked,
+      };
+    }
+
+    function applySettings(s) {
+      if (s.layout) { document.getElementById('layout-select').value = s.layout; sendUpdate({ layout: s.layout }); }
+      const sliders = { camW: 'cam-w', comW: 'com-w', camZoom: 'cam-zoom', g1x: 'g1x', g1y: 'g1y', g2x: 'g2x', g2y: 'g2y', t1x: 't1x', t1y: 't1y', t2x: 't2x', t2y: 't2y', gameSplit: 'game-split', comBallW: 'com-ball-w', comFsScale: 'com-fs-scale', comPartyCols: 'com-party-cols', comPartyGap: 'com-party-gap', comPad: 'com-pad' };
+      for (const [key, id] of Object.entries(sliders)) {
+        if (s[key] !== undefined) {
+          document.getElementById(id).value = s[key];
+          document.getElementById(id + '-val').value = s[key];
+          sendUpdate({ [key]: String(s[key]) });
+        }
+      }
+      if (s.hud !== undefined) { document.getElementById('hud-enabled').checked = s.hud; sendUpdate({ hud: s.hud ? '1' : '0' }); }
+      if (s.timer !== undefined) { document.getElementById('timer-enabled').checked = s.timer; sendUpdate({ timer: s.timer ? '1' : '0' }); }
+      if (s.chat !== undefined) { document.getElementById('chat-enabled').checked = s.chat; sendUpdate({ chat: s.chat ? '1' : '0' }); }
+      if (s.coupling !== undefined) { document.getElementById('coupling-enabled').checked = s.coupling; }
+      if (s.comHeaderHidden !== undefined) { document.getElementById('com-header-hidden').checked = s.comHeaderHidden; sendUpdate({ comHeader: s.comHeaderHidden ? '0' : '1' }); }
+      // Send combined comStyle so overlay forwards CSS vars to community iframe
+      sendComStyle();
+    }
+
+    document.getElementById('btn-copy-settings').addEventListener('click', () => {
+      const json = JSON.stringify(getCurrentSettings(), null, 2);
+      navigator.clipboard.writeText(json).then(() => {
+        const btn = document.getElementById('btn-copy-settings');
+        btn.textContent = 'Kopiert!';
+        setTimeout(() => btn.textContent = 'Kopieren', 2000);
+      });
+    });
+
+    document.getElementById('btn-load-settings').addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const settings = JSON.parse(text);
+        applySettings(settings);
+        const btn = document.getElementById('btn-load-settings');
+        btn.textContent = 'Geladen!';
+        setTimeout(() => btn.textContent = 'Einfuegen', 2000);
+      } catch (e) {
+        alert('Keine gueltigen Einstellungen in der Zwischenablage');
+      }
+    });
+  </script>
+</body>
+</html>

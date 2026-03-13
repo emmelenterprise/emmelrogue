@@ -14,6 +14,7 @@ import {
   TurnStatusEffectModifier,
 } from "#modifiers/modifier";
 import { FieldPhase } from "#phases/field-phase";
+import { chatTrainers } from "#app/emmelrogue/chat-trainers";
 import i18next from "i18next";
 
 export class TurnEndPhase extends FieldPhase {
@@ -76,6 +77,21 @@ export class TurnEndPhase extends FieldPhase {
     if (globalScene.arena.terrain && !globalScene.arena.terrain.lapse()) {
       globalScene.arena.trySetTerrain(TerrainType.NONE);
     }
+
+    // Report updated party HP to community overlay after each turn
+    try {
+      const playerParty = globalScene.getPlayerParty().map(p => ({
+        speciesId: p.species.speciesId,
+        iconId: p.getIconId(),
+        name: p.getNameToRender(),
+        level: p.level,
+        shiny: p.shiny,
+        shinyVariant: p.shiny ? (p.variant ?? 0) + 1 : 0,
+        hp: p.hp,
+        maxHp: p.getMaxHp(),
+      }));
+      chatTrainers.reportStreamerParty(playerParty);
+    } catch { /* non-critical */ }
 
     this.end();
   }

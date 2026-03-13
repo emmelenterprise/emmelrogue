@@ -103,6 +103,8 @@ import {
   type ModifierType,
   PokemonHeldItemModifierType,
 } from "#modifiers/modifier-type";
+import { raceManager } from "#app/emmelrogue/race-manager";
+import { chatTrainers } from "#app/emmelrogue/chat-trainers";
 import { MysteryEncounter } from "#mystery-encounters/mystery-encounter";
 import { MysteryEncounterSaveData } from "#mystery-encounters/mystery-encounter-save-data";
 import { allMysteryEncounters, mysteryEncountersByBiome } from "#mystery-encounters/mystery-encounters";
@@ -1157,9 +1159,16 @@ export class BattleScene extends SceneBase {
 
     // Reset RNG after end of game or save & quit.
     // This needs to happen after clearing this.currentBattle or the seed will be affected by the last wave played
-    this.setSeed(Overrides.SEED_OVERRIDE || randomString(24));
-    console.log("Seed:", this.seed);
+    this.setSeed(raceManager.getSeed() || Overrides.SEED_OVERRIDE || randomString(24));
+    console.log("Seed:", this.seed, raceManager.isRaceMode() ? "(race)" : "");
     this.resetSeed();
+
+    // Start chat trainer session (solo or race P1 only, P2 joins existing)
+    if (!raceManager.isRaceMode() || raceManager.getPlayerNumber() === 1) {
+      chatTrainers.startSession(this.seed, raceManager.getRaceCode() || undefined);
+    } else if (raceManager.isRaceMode() && raceManager.getPlayerNumber() === 2 && raceManager.getRaceCode()) {
+      chatTrainers.joinRaceSession(raceManager.getRaceCode()!);
+    }
 
     this.biomeWaveText.setText(startingWave.toString());
     this.biomeWaveText.setVisible(false);

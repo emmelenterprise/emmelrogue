@@ -1,5 +1,6 @@
 import type { Ability } from "#abilities/ability";
 import { PLAYER_PARTY_MAX_SIZE } from "#app/constants";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { globalScene } from "#app/global-scene";
 import { starterColors } from "#app/global-vars/starter-colors";
 import Overrides from "#app/overrides";
@@ -1220,6 +1221,14 @@ export class StarterSelectUiHandler extends MessageUiHandler {
 
       handleTutorial(Tutorial.STARTER_SELECT);
 
+      // Race mode: auto-populate party with server-assigned random starters
+      if (raceManager.isRaceMode() && raceManager.getStarterMode() === "random") {
+        const starters = raceManager.getStarters();
+        if (starters && starters.length > 0) {
+          this.autoPopulateRaceStarters(starters);
+        }
+      }
+
       return true;
     }
 
@@ -1251,30 +1260,33 @@ export class StarterSelectUiHandler extends MessageUiHandler {
 
     const caughtAttr = dexEntry.caughtAttr;
 
-    const hasShiny = caughtAttr & DexAttr.SHINY;
-    const hasNonShiny = caughtAttr & DexAttr.NON_SHINY;
-    if (starterAttributes.shiny && !hasShiny) {
-      // shiny form wasn't unlocked, purging shiny and variant setting
-      starterAttributes.shiny = undefined;
-      starterAttributes.variant = undefined;
-    } else if (starterAttributes.shiny === false && !hasNonShiny) {
-      // non shiny form wasn't unlocked, purging shiny setting
-      starterAttributes.shiny = undefined;
-    }
-
-    if (starterAttributes.variant !== undefined) {
-      const unlockedVariants = [
-        hasShiny && caughtAttr & DexAttr.DEFAULT_VARIANT,
-        hasShiny && caughtAttr & DexAttr.VARIANT_2,
-        hasShiny && caughtAttr & DexAttr.VARIANT_3,
-      ];
-      if (
-        Number.isNaN(starterAttributes.variant)
-        || starterAttributes.variant < 0
-        || !unlockedVariants[starterAttributes.variant]
-      ) {
-        // variant value is invalid or requested variant wasn't unlocked, purging setting
+    // Race mode: skip shiny/variant unlock checks — all forms available
+    if (!raceManager.isRaceMode()) {
+      const hasShiny = caughtAttr & DexAttr.SHINY;
+      const hasNonShiny = caughtAttr & DexAttr.NON_SHINY;
+      if (starterAttributes.shiny && !hasShiny) {
+        // shiny form wasn't unlocked, purging shiny and variant setting
+        starterAttributes.shiny = undefined;
         starterAttributes.variant = undefined;
+      } else if (starterAttributes.shiny === false && !hasNonShiny) {
+        // non shiny form wasn't unlocked, purging shiny setting
+        starterAttributes.shiny = undefined;
+      }
+
+      if (starterAttributes.variant !== undefined) {
+        const unlockedVariants = [
+          hasShiny && caughtAttr & DexAttr.DEFAULT_VARIANT,
+          hasShiny && caughtAttr & DexAttr.VARIANT_2,
+          hasShiny && caughtAttr & DexAttr.VARIANT_3,
+        ];
+        if (
+          Number.isNaN(starterAttributes.variant)
+          || starterAttributes.variant < 0
+          || !unlockedVariants[starterAttributes.variant]
+        ) {
+          // variant value is invalid or requested variant wasn't unlocked, purging setting
+          starterAttributes.variant = undefined;
+        }
       }
     }
 
@@ -2809,6 +2821,63 @@ export class StarterSelectUiHandler extends MessageUiHandler {
     this.updateInstructions();
   }
 
+  /** Race mode: Auto-populate party with server-assigned random starters */
+  autoPopulateRaceStarters(speciesIds: number[]): void {
+    console.log("[Race] Auto-populating starters:", speciesIds);
+    for (const speciesId of speciesIds) {
+      const species = allSpecies.find(s => s.speciesId === speciesId);
+      if (!species) {
+        console.warn(`[Race] Species ${speciesId} not found`);
+        continue;
+      }
+
+      // Use dex props if available, otherwise build safe defaults
+      let dexAttr: bigint;
+      const { dexEntry, starterDataEntry } = this.getSpeciesData(speciesId as SpeciesId);
+      if (dexEntry?.caughtAttr) {
+        dexAttr = this.getCurrentDexProps(speciesId);
+      } else {
+        dexAttr = DexAttr.MALE + DexAttr.NON_SHINY + DexAttr.DEFAULT_VARIANT + DexAttr.DEFAULT_FORM;
+      }
+
+      const props = globalScene.gameData.getSpeciesDexAttrProps(species, dexAttr);
+      const abilityIndex = globalScene.gameData.getStarterSpeciesDefaultAbilityIndex(species);
+      const nature = globalScene.gameData.getSpeciesDefaultNature(species, dexEntry);
+      const teraType = species.type1;
+
+      // Generate moveset (same logic as setSpeciesDetails)
+      const moves: number[] = [];
+      // Egg moves first (only if player has dex data for this species)
+      if (starterDataEntry && speciesEggMoves.hasOwnProperty(speciesId)) {
+        for (let em = 0; em < 4; em++) {
+          if (starterDataEntry.eggMoves & (1 << em)) {
+            moves.push(speciesEggMoves[speciesId][em]);
+          }
+        }
+      }
+      // Level moves (learned at levels 1-5)
+      let levelMoves: [number, number][];
+      if (
+        pokemonFormLevelMoves.hasOwnProperty(speciesId)
+        && props.formIndex
+        && pokemonFormLevelMoves[speciesId].hasOwnProperty(props.formIndex)
+      ) {
+        levelMoves = pokemonFormLevelMoves[speciesId][props.formIndex];
+      } else {
+        levelMoves = pokemonSpeciesLevelMoves[speciesId];
+      }
+      moves.push(...levelMoves.filter(lm => lm[0] > 0 && lm[0] <= 5).map(lm => lm[1]));
+
+      // Deduplicate and take first 4
+      const uniqueMoves = [...new Set(moves)];
+      const moveset = uniqueMoves.slice(0, 4) as StarterMoveset;
+
+      this.addToParty(species, dexAttr, abilityIndex, nature, moveset, teraType, true);
+    }
+    this.tryUpdateValue(0);
+    console.log("[Race] Auto-populated", this.starterSpecies.length, "starters");
+  }
+
   updatePartyIcon(species: PokemonSpecies, index: number) {
     const props = globalScene.gameData.getSpeciesDexAttrProps(species, this.getCurrentDexProps(species.speciesId));
     this.starterIcons[index].setTexture(species.getIconAtlasKey(props.formIndex, props.shiny, props.variant));
@@ -4145,7 +4214,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
         } else {
           levelMoves = pokemonSpeciesLevelMoves[species.speciesId];
         }
-        this.speciesStarterMoves.push(...levelMoves.filter(lm => lm[0] > 0 && lm[0] <= 5).map(lm => lm[1]));
+        // EmmelRogue: Put egg moves FIRST so they're included in the default 4-move selection
         if (speciesEggMoves.hasOwnProperty(species.speciesId)) {
           for (let em = 0; em < 4; em++) {
             if (starterDataEntry.eggMoves & (1 << em)) {
@@ -4153,6 +4222,7 @@ export class StarterSelectUiHandler extends MessageUiHandler {
             }
           }
         }
+        this.speciesStarterMoves.push(...levelMoves.filter(lm => lm[0] > 0 && lm[0] <= 5).map(lm => lm[1]));
 
         const speciesMoveData = starterDataEntry.moveset;
         const moveData: StarterMoveset | null = speciesMoveData

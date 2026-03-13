@@ -9,6 +9,10 @@ import { CacheBustedLoaderPlugin } from "#plugins/cache-busted-loader-plugin";
 import { getWindowVariantSuffix, WindowVariant } from "#ui/ui-theme";
 import { hasAllLocalizedSprites, localPing } from "#utils/common";
 import { enumValueToKey, getEnumValues } from "#utils/enums";
+import { connect as emmelrogueConnect } from "#app/emmelrogue/multiplayer";
+import { raceManager } from "#app/emmelrogue/race-manager";
+import { startStreaming } from "#app/emmelrogue/webrtc";
+import { initRaceHud } from "#app/emmelrogue/race-hud";
 import i18next from "i18next";
 import type { GameObjects } from "phaser";
 
@@ -411,10 +415,10 @@ export class LoadingScene extends SceneBase {
     const midHeight = height / 2;
 
     const logo = this.add //
-      .image(midWidth, 240, "")
+      .image(midWidth, 200, "")
       .setVisible(false)
       .setOrigin(0.5, 0.5)
-      .setScale(4);
+      .setScale(0.4);
 
     const percentText = this.make
       .text({
@@ -484,32 +488,14 @@ export class LoadingScene extends SceneBase {
       });
     }
 
-    const intro = this.add
-      .video(0, 0)
-      .setOrigin(0)
-      .setScale(3)
-      .once(Phaser.GameObjects.Events.VIDEO_COMPLETE, (video: Phaser.GameObjects.Video) => {
-        this.tweens.add({
-          targets: intro,
-          duration: 500,
-          alpha: 0,
-          ease: "Sine.easeIn",
-          onComplete: () => video.destroy(),
-        });
-        for (const g of loadingGraphics) {
-          g.setVisible(true);
-        }
-      });
+    // EmmelRogue: Skip publisher intro video — show loading bar immediately
+    for (const g of loadingGraphics) {
+      g.setVisible(true);
+    }
 
     this.load
       .once(this.LOAD_EVENTS.START, () => {
-        // videos do not need to be preloaded
-        intro.loadURL("images/intro_dark.mp4", true);
-        if (mobile) {
-          intro.video?.setAttribute("webkit-playsinline", "webkit-playsinline");
-          intro.video?.setAttribute("playsinline", "playsinline");
-        }
-        intro.play();
+        // intro video skipped for EmmelRogue
       })
       .on(this.LOAD_EVENTS.PROGRESS, (progress: number) => {
         percentText.setText(`${Math.floor(progress * 100)}%`);
@@ -540,13 +526,24 @@ export class LoadingScene extends SceneBase {
         for (const g of loadingGraphics) {
           g.destroy();
         }
-        intro.destroy();
       });
   }
 
   async create() {
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.handleDestroy());
+    emmelrogueConnect();
     this.scene.start("battle");
+
+    // Start WebRTC streaming after a short delay (canvas needs to be rendering)
+    // The in-game race HUD is disabled by default — use /overlay/ page in OBS instead
+    // To enable the small in-game HUD, add &hud=1 to the game URL
+    if (raceManager.isRaceMode()) {
+      const showHud = new URLSearchParams(window.location.search).get("hud") === "1";
+      if (showHud) {
+        initRaceHud();
+      }
+      setTimeout(() => startStreaming(), 3000);
+    }
   }
 
   handleDestroy() {

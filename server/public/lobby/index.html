@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="container">
-    <h1 class="title">EmmelRogue Race</h1>
+    <img src="emmelrogue-logo.png" alt="EmmelRogue" class="logo">
     <p class="subtitle">Zwei Spieler, ein Seed, ein Sieger</p>
 
     <!-- Login Section (before Twitch auth) -->
@@ -39,18 +39,128 @@
         <h2>Race erstellen</h2>
         <div class="field">
           <label>Starter-Modus</label>
-          <div class="radio-group">
+          <div class="radio-group" style="flex-direction: column; gap: 0.5rem;">
             <label class="radio-label">
               <input type="radio" name="starter-mode" value="random" checked>
-              <span>Random (gleiche fuer beide)</span>
+              <span>Random (gleich fuer beide)</span>
             </label>
             <label class="radio-label">
               <input type="radio" name="starter-mode" value="free">
-              <span>Freie Wahl</span>
+              <span>Freie Wahl (im Spiel)</span>
             </label>
           </div>
         </div>
-        <button id="btn-create" class="btn btn-primary">Race erstellen</button>
+        <!-- Layout Configurator (only visible for janemmel) -->
+        <details class="field hidden" id="layout-config">
+          <summary class="layout-toggle">OBS Layout</summary>
+          <!-- Visual Layout Preview -->
+          <div class="layout-preview" id="layout-preview">
+            <div class="lp-row" id="lp-row-1">
+              <div class="lp-com lp-hidden" id="lp-com-1"><span>T</span></div>
+              <div class="lp-cam" id="lp-cam-1">
+                <video id="cam-preview" class="cam-preview" autoplay muted playsinline></video>
+                <span>CAM</span>
+              </div>
+              <div class="lp-game" id="lp-game-1">
+                <div class="lp-game-content" id="lp-gc-1"></div>
+              </div>
+            </div>
+            <div class="lp-sep"></div>
+            <div class="lp-row" id="lp-row-2">
+              <div class="lp-com lp-hidden" id="lp-com-2"><span>T</span></div>
+              <div class="lp-cam" id="lp-cam-2"><span>CAM</span></div>
+              <div class="lp-game" id="lp-game-2">
+                <div class="lp-game-content" id="lp-gc-2"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Layout Controls -->
+          <div class="layout-controls">
+            <div class="control-row">
+              <label>Anordnung</label>
+              <select id="overlay-layout" class="select">
+                <option value="CG-CG">Cam Links | Cam Links</option>
+                <option value="GC-GC">Cam Rechts | Cam Rechts</option>
+                <option value="CG-GC">Cam Links | Cam Rechts</option>
+                <option value="GC-CG">Cam Rechts | Cam Links</option>
+                <optgroup label="Mit Community Panel">
+                  <option value="CGT-CGT">C G T | C G T</option>
+                  <option value="TCG-TCG">T C G | T C G</option>
+                  <option value="GT-GT">G T | G T (ohne Cam)</option>
+                  <option value="TG-TG">T G | T G (ohne Cam)</option>
+                  <option value="CGT-GCT">C G T | G C T</option>
+                  <option value="CGT-TGC" selected>C G T | T G C</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="control-row">
+              <label>Kamera-Breite <input type="number" class="val-input" id="cam-width-value" value="675" min="0" max="960" step="10">px</label>
+              <input type="range" id="cam-width-slider" min="0" max="960" value="675" step="10">
+            </div>
+            <div class="control-row">
+              <label>Kamera-Zoom <input type="number" class="val-input" id="cam-zoom-value" value="100" min="50" max="300" step="10">%</label>
+              <input type="range" id="cam-zoom-slider" min="50" max="300" value="100" step="10">
+            </div>
+            <div class="control-row hidden" id="community-width-row">
+              <label>Community-Breite <input type="number" class="val-input" id="com-width-value" value="350" min="0" max="960" step="10">px</label>
+              <input type="range" id="com-width-slider" min="0" max="960" value="350" step="10">
+            </div>
+            <div class="control-group-label hidden" id="t1-offset-label">Community 1 (oben)</div>
+            <div class="control-row hidden" id="t1x-row">
+              <label>X-Offset <input type="number" class="val-input" id="t1x-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="t1x-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-row hidden" id="t1y-row">
+              <label>Y-Offset <input type="number" class="val-input" id="t1y-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="t1y-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-group-label hidden" id="t2-offset-label">Community 2 (unten)</div>
+            <div class="control-row hidden" id="t2x-row">
+              <label>X-Offset <input type="number" class="val-input" id="t2x-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="t2x-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-row hidden" id="t2y-row">
+              <label>Y-Offset <input type="number" class="val-input" id="t2y-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="t2y-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-group-label">Game 1 (oben)</div>
+            <div class="control-row">
+              <label>X-Offset <input type="number" class="val-input" id="g1x-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="g1x-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-row">
+              <label>Y-Offset <input type="number" class="val-input" id="g1y-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="g1y-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-group-label">Game 2 (unten)</div>
+            <div class="control-row">
+              <label>X-Offset <input type="number" class="val-input" id="g2x-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="g2x-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-row">
+              <label>Y-Offset <input type="number" class="val-input" id="g2y-value" value="0" min="-400" max="400" step="5">px</label>
+              <input type="range" id="g2y-slider" min="-400" max="400" value="0" step="5">
+            </div>
+            <div class="control-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="hud-enabled" checked>
+                <span>Wave-HUD anzeigen</span>
+              </label>
+            </div>
+            <div class="control-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="timer-enabled" checked>
+                <span>Timer anzeigen</span>
+              </label>
+            </div>
+            <button id="btn-copy-specs" class="btn btn-secondary" style="margin-top: 0.5rem; font-size: 0.85rem;">Layout kopieren</button>
+          </div>
+        </details>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <button id="btn-create" class="btn btn-primary" style="flex:1;">Race erstellen</button>
+          <button id="btn-solo" class="btn btn-secondary" style="flex:1;">Solo starten</button>
+          <button id="btn-gym" class="btn btn-gym hidden" style="flex-basis:100%;">Arenaleiter-Modus</button>
+        </div>
       </div>
 
       <div class="divider">oder</div>
@@ -95,6 +205,15 @@
           </div>
         </div>
 
+        <!-- OBS Overlay URL -->
+        <div class="obs-url-section hidden" id="obs-url-section">
+          <label>OBS Overlay URL</label>
+          <div class="obs-url-row">
+            <input type="text" id="obs-url" class="obs-url-input" readonly>
+            <button id="btn-copy-obs" class="btn-icon" title="URL kopieren">&#128203;</button>
+          </div>
+        </div>
+
         <div class="lobby-actions">
           <button id="btn-start" class="btn btn-primary btn-large hidden">Race starten</button>
           <button id="btn-leave" class="btn btn-danger">Verlassen</button>
@@ -102,9 +221,77 @@
       </div>
     </div>
 
+    <!-- Gym Lobby Section -->
+    <div id="gym-section" class="hidden">
+      <div class="card gym-card">
+        <div class="gym-header">
+          <h2>Arenaleiter-Modus</h2>
+          <div class="gym-status">
+            <span id="gym-status-badge" class="gym-badge">Aktiv</span>
+            <button id="btn-gym-end" class="btn btn-danger btn-sm" onclick="endGymSession()">Beenden</button>
+          </div>
+        </div>
+
+        <!-- Active Boss Team -->
+        <div class="gym-team-section">
+          <div class="gym-team-label">Dein Team</div>
+          <div class="gym-preset-tabs">
+            <button class="gym-preset-tab active" onclick="switchGymPreset(0)">Team 1</button>
+            <button class="gym-preset-tab" onclick="switchGymPreset(1)">Team 2</button>
+            <button class="gym-preset-tab" onclick="switchGymPreset(2)">Team 3</button>
+          </div>
+          <div id="gym-boss-team" class="gym-team-display"></div>
+        </div>
+
+        <!-- Current Challenger -->
+        <div class="gym-challenger-section">
+          <div class="gym-team-label">Aktueller Herausforderer</div>
+          <div id="gym-current-challenger" class="gym-challenger-slot">
+            <span class="gym-waiting">Warte auf Herausforderer...</span>
+          </div>
+        </div>
+
+        <!-- Queue -->
+        <div class="gym-queue-section">
+          <div class="gym-team-label">Warteschlange (<span id="gym-queue-count">0</span>)</div>
+          <div id="gym-queue-list" class="gym-queue-list"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="gym-actions">
+          <button id="btn-gym-fight" class="btn btn-primary btn-large hidden" onclick="startGymBattle()">Kampf starten!</button>
+          <a href="/gym-admin/" target="_blank" class="gym-config-link">Einstellungen & Konfiguration</a>
+          <div class="gym-links">
+            <span>Challenger-Link: </span>
+            <a id="gym-challenger-link" href="/gym/" target="_blank" class="gym-link">/gym/</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Status Messages -->
     <div id="status-bar" class="hidden">
       <span id="status-text"></span>
+    </div>
+
+    <!-- Streamer Tools (only visible for janemmel) -->
+    <div id="streamer-tools" class="hidden">
+      <div class="community-link">
+        <a href="/community/" target="_blank">Community Trainer Editor</a>
+        <span>Trainer claimen, Teams bauen & Gimmicks voten</span>
+      </div>
+      <div class="community-link">
+        <a href="/community/editor.html" target="_blank">Community Overlay Editor</a>
+        <span>OBS Community-Widget konfigurieren</span>
+      </div>
+      <div class="community-link">
+        <a href="/layout/" target="_blank">Live Layout Editor</a>
+        <span>OBS Overlay-Layout waehrend dem Spiel anpassen</span>
+      </div>
+      <div class="community-link">
+        <a href="/gym-admin/" target="_blank">Gym Leader Admin</a>
+        <span>Teams, Budget & Einstellungen konfigurieren</span>
+      </div>
     </div>
 
     <!-- Connection indicator -->

@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Community Overlay Editor</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a10;
+      --panel: #13131d;
+      --card: #1a1a26;
+      --card-border: #2a2a3a;
+      --neon: #a855f7;
+      --neon-glow: rgba(168, 85, 247, 0.5);
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --blue: #3b82f6;
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --text-muted: #475569;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    .editor-layout {
+      display: flex;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* --- Left: Controls --- */
+    .editor-controls {
+      width: 420px;
+      min-width: 420px;
+      background: var(--panel);
+      border-right: 1px solid var(--card-border);
+      overflow-y: auto;
+      padding: 0 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .editor-controls::-webkit-scrollbar { width: 6px; }
+    .editor-controls::-webkit-scrollbar-track { background: transparent; }
+    .editor-controls::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    .editor-top {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--panel);
+      padding: 16px 0 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .editor-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--neon);
+    }
+
+    /* Player Tabs */
+    .player-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .player-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .player-tab.active {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: var(--neon);
+      color: var(--neon);
+    }
+
+    .player-tab:hover:not(.active) {
+      border-color: #444;
+    }
+
+    .editor-section {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .editor-section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      cursor: grab;
+      user-select: none;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .editor-section-header:active { cursor: grabbing; }
+
+    .editor-section.dragging {
+      opacity: 0.5;
+      border: 1px dashed var(--neon);
+    }
+
+    .editor-section.drag-over {
+      border-top: 2px solid var(--neon);
+    }
+
+    .drag-handle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      cursor: grab;
+      flex-shrink: 0;
+    }
+
+    .section-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      flex: 1;
+    }
+
+    .section-toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      background: #333;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+
+    .section-toggle.active { background: var(--neon); }
+
+    .section-toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.2s;
+    }
+
+    .section-toggle.active::after { transform: translateX(16px); }
+
+    .section-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section-body.hidden { display: none; }
+
+    /* Form controls */
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .field-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+
+    .field-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      color: var(--text);
+      outline: none;
+    }
+
+    .field-input:focus { border-color: var(--neon); }
+
+    .field-input-sm {
+      width: 60px;
+      flex: none;
+    }
+
+    select.field-input {
+      cursor: pointer;
+    }
+
+    /* Pokemon editor rows */
+    .poke-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+    }
+
+    .poke-row .field-input { font-size: 0.75rem; padding: 3px 6px; }
+
+    .btn-add {
+      font-size: 0.7rem;
+      padding: 3px 10px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      border-radius: 4px;
+      color: var(--neon);
+      cursor: pointer;
+    }
+    .btn-add:hover { background: rgba(168, 85, 247, 0.25); }
+
+    .btn-remove {
+      font-size: 0.8rem;
+      background: none;
+      border: none;
+      color: var(--red);
+      cursor: pointer;
+      padding: 2px 4px;
+      line-height: 1;
+    }
+
+    /* Trainer editor */
+    .trainer-card {
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .trainer-card-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Gimmick/Vote tags */
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .tag {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      border-radius: 4px;
+      color: var(--neon);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* --- Right: Preview --- */
+    .editor-preview {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      background: #080810;
+      overflow-y: auto;
+    }
+
+    .preview-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    .preview-size-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .preview-size-controls label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .preview-size-controls input {
+      width: 70px;
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 0.75rem;
+      color: var(--text);
+      text-align: center;
+    }
+
+    .previews-container {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .preview-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .preview-slot-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .preview-slot-label.p1 { color: var(--neon); border: 1px solid var(--neon); }
+    .preview-slot-label.p2 { color: var(--blue); border: 1px solid var(--blue); }
+    .preview-slot-label.active { background: rgba(168, 85, 247, 0.2); }
+    .preview-slot-label.p2.active { background: rgba(59, 130, 246, 0.2); }
+
+    .preview-frame {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg);
+      box-shadow: 0 0 30px rgba(168, 85, 247, 0.1);
+    }
+
+    .preview-frame.active-p1 { border-color: var(--neon); box-shadow: 0 0 20px rgba(168, 85, 247, 0.2); }
+    .preview-frame.active-p2 { border-color: var(--blue); box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
+
+    .preview-frame iframe {
+      display: block;
+      border: none;
+    }
+
+    /* Styling sections */
+    .style-section {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .style-section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .style-section-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .style-section-body.hidden { display: none; }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slider-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      min-width: 90px;
+      flex-shrink: 0;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--neon);
+      height: 4px;
+    }
+
+    .slider-value {
+      font-size: 0.7rem;
+      color: var(--text);
+      min-width: 45px;
+      text-align: right;
+      font-family: 'Courier New', monospace;
+    }
+
+    .btn-copy {
+      font-size: 0.75rem;
+      padding: 6px 16px;
+      background: var(--neon);
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .btn-copy:hover { filter: brightness(1.15); }
+    .btn-copy.copied { background: var(--green); }
+
+    .btn-reset {
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 4px;
+      color: var(--red);
+      cursor: pointer;
+    }
+    .btn-reset:hover { background: rgba(239, 68, 68, 0.25); }
+
+    .style-divider {
+      height: 1px;
+      background: var(--card-border);
+      margin: 4px 0;
+    }
+
+    .hint {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="editor-layout">
+    <!-- Left: Controls -->
+    <div class="editor-controls" id="controls">
+      <div class="editor-top">
+        <div class="editor-title">Community Overlay Editor</div>
+        <div class="player-tabs">
+          <div class="player-tab active" data-player="0" onclick="switchPlayer(0)">Spieler 1</div>
+          <div class="player-tab" data-player="1" onclick="switchPlayer(1)">Spieler 2</div>
+        </div>
+      </div>
+
+      <!-- Sections rendered by JS -->
+      <div id="section-list"></div>
+
+      <!-- Font Sizes -->
+      <div class="style-section">
+        <div class="style-section-header" onclick="document.getElementById('style-body-fonts').classList.toggle('hidden')">
+          <span class="section-name">Schriftgroessen</span>
+        </div>
+        <div class="style-section-body" id="style-body-fonts">
+          <div class="slider-row">
+            <span class="slider-label">Global Scale</span>
+            <input type="range" min="0.5" max="2.5" step="0.05" value="1" data-css-var="--fs-scale" data-unit="">
+            <span class="slider-value">1.00</span>
+          </div>
+          <div class="style-divider"></div>
+          <div class="slider-row"><span class="slider-label">Code</span><input type="range" min="0.3" max="2" step="0.05" value="0.85" data-css-var="--fs-code" data-unit="rem"><span class="slider-value">0.85rem</span></div>
+          <div class="slider-row"><span class="slider-label">Wave</span><input type="range" min="0.3" max="2" step="0.05" value="0.75" data-css-var="--fs-wave" data-unit="rem"><span class="slider-value">0.75rem</span></div>
+          <div class="slider-row"><span class="slider-label">Biome</span><input type="range" min="0.3" max="2" step="0.05" value="0.7" data-css-var="--fs-biome" data-unit="rem"><span class="slider-value">0.70rem</span></div>
+          <div class="slider-row"><span class="slider-label">Section Titel</span><input type="range" min="0.3" max="2" step="0.05" value="0.65" data-css-var="--fs-section-title" data-unit="rem"><span class="slider-value">0.65rem</span></div>
+          <div class="slider-row"><span class="slider-label">Pokemon Name</span><input type="range" min="0.2" max="2" step="0.05" value="0.5" data-css-var="--fs-pokemon-name" data-unit="rem"><span class="slider-value">0.50rem</span></div>
+          <div class="slider-row"><span class="slider-label">Pokemon Level</span><input type="range" min="0.2" max="2" step="0.05" value="0.45" data-css-var="--fs-pokemon-level" data-unit="rem"><span class="slider-value">0.45rem</span></div>
+          <div class="slider-row"><span class="slider-label">Trainer Wave</span><input type="range" min="0.3" max="2" step="0.05" value="0.6" data-css-var="--fs-trainer-wave" data-unit="rem"><span class="slider-value">0.60rem</span></div>
+          <div class="slider-row"><span class="slider-label">Trainer Klasse</span><input type="range" min="0.3" max="2" step="0.05" value="0.7" data-css-var="--fs-trainer-class" data-unit="rem"><span class="slider-value">0.70rem</span></div>
+          <div class="slider-row"><span class="slider-label">Trainer Status</span><input type="range" min="0.3" max="2" step="0.05" value="0.6" data-css-var="--fs-trainer-status" data-unit="rem"><span class="slider-value">0.60rem</span></div>
+          <div class="slider-row"><span class="slider-label">Gimmick</span><input type="range" min="0.3" max="2" step="0.05" value="0.6" data-css-var="--fs-gimmick" data-unit="rem"><span class="slider-value">0.60rem</span></div>
+          <div class="slider-row"><span class="slider-label">Vote Label</span><input type="range" min="0.3" max="2" step="0.05" value="0.65" data-css-var="--fs-vote-label" data-unit="rem"><span class="slider-value">0.65rem</span></div>
+          <div class="slider-row"><span class="slider-label">Vote Timer</span><input type="range" min="0.3" max="2" step="0.05" value="0.6" data-css-var="--fs-vote-timer" data-unit="rem"><span class="slider-value">0.60rem</span></div>
+          <div class="slider-row"><span class="slider-label">Leer-Text</span><input type="range" min="0.3" max="2" step="0.05" value="0.65" data-css-var="--fs-empty" data-unit="rem"><span class="slider-value">0.65rem</span></div>
+          <button class="btn-reset" id="btn-reset-fonts">Zuruecksetzen</button>
+        </div>
+      </div>
+
+      <!-- Sizes -->
+      <div class="style-section">
+        <div class="style-section-header" onclick="document.getElementById('style-body-sizes').classList.toggle('hidden')">
+          <span class="section-name">Groessen & Abstande</span>
+        </div>
+        <div class="style-section-body" id="style-body-sizes">
+          <div class="slider-row"><span class="slider-label">Ball Breite</span><input type="range" min="16" max="80" step="2" value="40" data-css-var="--ball-w" data-unit="px"><span class="slider-value">40px</span></div>
+          <div class="slider-row"><span class="slider-label">Ball Hoehe</span><input type="range" min="14" max="70" step="2" value="36" data-css-var="--ball-h" data-unit="px"><span class="slider-value">36px</span></div>
+          <div class="slider-row"><span class="slider-label">Party Abstand</span><input type="range" min="0" max="12" step="1" value="4" data-css-var="--party-gap" data-unit="px"><span class="slider-value">4px</span></div>
+          <div class="slider-row"><span class="slider-label">HP Bar Hoehe</span><input type="range" min="1" max="8" step="1" value="3" data-css-var="--hp-bar-h" data-unit="px"><span class="slider-value">3px</span></div>
+          <div class="slider-row"><span class="slider-label">Overlay Padding</span><input type="range" min="0" max="24" step="2" value="8" data-css-var="--overlay-pad" data-unit="px"><span class="slider-value">8px</span></div>
+          <div class="slider-row"><span class="slider-label">Overlay Gap</span><input type="range" min="0" max="16" step="1" value="6" data-css-var="--overlay-gap" data-unit="px"><span class="slider-value">6px</span></div>
+          <button class="btn-reset" id="btn-reset-sizes">Zuruecksetzen</button>
+        </div>
+      </div>
+
+      <button class="btn-copy" id="btn-copy-settings">Einstellungen kopieren (aktiver Spieler)</button>
+      <button class="btn-copy" id="btn-copy-both" style="background:var(--blue)">Beide Spieler kopieren</button>
+    </div>
+
+    <!-- Right: Preview -->
+    <div class="editor-preview">
+      <div class="preview-label">Vorschau</div>
+      <div class="preview-size-controls">
+        <label>Breite <input type="number" id="preview-w" value="350" min="150" max="800" step="10">px</label>
+        <label>Hoehe <input type="number" id="preview-h" value="540" min="200" max="1920" step="10">px</label>
+      </div>
+      <div class="previews-container">
+        <div class="preview-slot">
+          <div class="preview-slot-label p1 active" onclick="switchPlayer(0)">Spieler 1</div>
+          <div class="preview-frame active-p1" id="preview-frame-0">
+            <iframe id="preview-iframe-0" width="350" height="540"></iframe>
+          </div>
+        </div>
+        <div class="preview-slot">
+          <div class="preview-slot-label p2" onclick="switchPlayer(1)">Spieler 2</div>
+          <div class="preview-frame" id="preview-frame-1">
+            <iframe id="preview-iframe-1" width="350" height="540"></iframe>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    // --- Pokemon Icon Path Helper ---
+    function getIconPath(idOrIconId, iconGen) {
+      if (iconGen) {
+        return `/images/pokemon/icons/${iconGen}/${idOrIconId}.png`;
+      }
+      const id = parseInt(String(idOrIconId).split('-')[0]) || 0;
+      let gen;
+      if (id <= 151) gen = 1;
+      else if (id <= 251) gen = 2;
+      else if (id <= 386) gen = 3;
+      else if (id <= 493) gen = 4;
+      else if (id <= 649) gen = 5;
+      else if (id <= 721) gen = 6;
+      else if (id <= 809) gen = 7;
+      else if (id <= 905) gen = 8;
+      else gen = 9;
+      return `/images/pokemon/icons/${gen}/${idOrIconId}.png`;
+    }
+
+    // --- Section config ---
+    const SECTION_DEFS = [
+      { id: 'header', name: 'Header' },
+      { id: 'party', name: 'Streamer Team' },
+      { id: 'trainers', name: 'Trainer Liste' },
+      { id: 'gimmicks', name: 'Gimmicks' },
+      { id: 'vote', name: 'Abstimmung' },
+      { id: 'chat', name: 'Chat Widget' },
+      { id: 'pokemon', name: 'Pokemon Catch' },
+    ];
+
+    // --- Default example data ---
+    function makeDefaultData() {
+      return {
+        code: 'ER42',
+        wave: 12,
+        biome: 'Wald',
+        party: [
+          { name: 'Glurak', speciesId: 6, level: 36, hp: 98, maxHp: 120, nickname: '', shiny: false },
+          { name: 'Pikachu', speciesId: 25, level: 33, hp: 65, maxHp: 65, nickname: 'Sparky', shiny: false },
+          { name: 'Relaxo', speciesId: 143, level: 30, hp: 12, maxHp: 200, nickname: '', shiny: false },
+          { name: 'Gengar', speciesId: 94, level: 34, hp: 0, maxHp: 90, nickname: '', shiny: true },
+          { name: 'Garados', speciesId: 130, level: 31, hp: 110, maxHp: 140, nickname: '', shiny: false },
+          { name: 'Lucario', speciesId: 448, level: 35, hp: 85, maxHp: 85, nickname: 'LuckyLuc', shiny: false },
+        ],
+        trainers: [
+          { waveIndex: 10, category: 'normal', trainerClass: 'Wanderer', claimedBy: 'user1', claimedByName: 'CoolViewer42', customParty: null, originalParty: [1,2,3], pokemonNicknames: {} },
+          { waveIndex: 13, category: 'gym_leader', trainerClass: 'Arenaleiter', claimedBy: null, claimedByName: null, customParty: [1,2,3,4], originalParty: [1,2,3,4], pokemonNicknames: {} },
+          { waveIndex: 15, category: 'boss', trainerClass: 'Team Rocket', claimedBy: 'user2', claimedByName: 'EmmelFan99', customParty: null, originalParty: [1,2,3,4,5], pokemonNicknames: { 0: 'Shadow', 2: 'Darkrai' } },
+          { waveIndex: 20, category: 'rival', trainerClass: 'Rivale', claimedBy: null, claimedByName: null, customParty: null, originalParty: [1,2,3,4,5,6], pokemonNicknames: {} },
+        ],
+        gimmicks: [
+          { id: 'shiny_wave', label: 'Shiny Wave', wavesLeft: 3 },
+          { id: 'level_boost', label: 'Level Boost', wavesLeft: 1 },
+        ],
+        vote: {
+          options: [
+            { id: 'opt1', label: 'Mehr Shinys' },
+            { id: 'opt2', label: 'Doppelte XP' },
+            { id: 'opt3', label: 'Boss Rush' },
+          ],
+          tallies: { opt1: 42, opt2: 28, opt3: 15 },
+          expiresAt: Date.now() + 120000,
+        },
+      };
+    }
+
+    function makeDefaultEmbeds() {
+      return {
+        chat: { channel: 'janemmel', theme: 'neon', fontSize: 13, maxMessages: 20, width: 0, height: 0, customUrl: '' },
+        pokemon: { style: 'classic', width: 0, height: 250, volume: 50, customUrl: '' },
+      };
+    }
+
+    function makeDefaultEnabled() {
+      const e = {};
+      SECTION_DEFS.forEach(s => e[s.id] = ['header','party','trainers','gimmicks','vote'].includes(s.id));
+      return e;
+    }
+
+    // --- Player states (two players) ---
+    const players = [
+      {
+        editData: makeDefaultData(),
+        sectionOrder: SECTION_DEFS.map(s => s.id),
+        sectionEnabled: makeDefaultEnabled(),
+        embedSettings: makeDefaultEmbeds(),
+        partyCols: 3,
+        cssVarValues: {},
+      },
+      {
+        editData: makeDefaultData(),
+        sectionOrder: SECTION_DEFS.map(s => s.id),
+        sectionEnabled: makeDefaultEnabled(),
+        embedSettings: makeDefaultEmbeds(),
+        partyCols: 3,
+        cssVarValues: {},
+      },
+    ];
+
+    let activeIdx = 0;
+
+    // Shortcuts to active player
+    function P() { return players[activeIdx]; }
+
+    // --- Preview iframes ---
+    const iframes = [
+      document.getElementById('preview-iframe-0'),
+      document.getElementById('preview-iframe-1'),
+    ];
+    const previewW = document.getElementById('preview-w');
+    const previewH = document.getElementById('preview-h');
+
+    function updatePreviewSize() {
+      const w = parseInt(previewW.value) || 350;
+      const h = parseInt(previewH.value) || 1080;
+      iframes.forEach(f => { f.width = w; f.height = h; });
+    }
+    previewW.addEventListener('input', updatePreviewSize);
+    previewH.addEventListener('input', updatePreviewSize);
+
+    // --- Switch Player ---
+    function switchPlayer(idx) {
+      // Save current CSS slider values
+      saveCssVars();
+
+      activeIdx = idx;
+
+      // Update tab UI
+      document.querySelectorAll('.player-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.player) === idx));
+      document.querySelectorAll('.preview-slot-label').forEach(l => l.classList.remove('active'));
+      document.querySelectorAll('.preview-slot-label')[idx].classList.add('active');
+      document.querySelectorAll('.preview-frame').forEach((f, i) => {
+        f.classList.remove('active-p1', 'active-p2');
+        if (i === idx) f.classList.add(idx === 0 ? 'active-p1' : 'active-p2');
+      });
+
+      // Restore CSS sliders from player state
+      restoreCssVars();
+
+      renderControls();
+      renderPreview(activeIdx);
+    }
+
+    function saveCssVars() {
+      const vals = {};
+      document.querySelectorAll('[data-css-var]').forEach(slider => {
+        const varName = slider.dataset.cssVar;
+        const unit = slider.dataset.unit;
+        vals[varName] = { val: parseFloat(slider.value), unit };
+      });
+      players[activeIdx].cssVarValues = vals;
+    }
+
+    function restoreCssVars() {
+      const vals = P().cssVarValues;
+      document.querySelectorAll('[data-css-var]').forEach(slider => {
+        const varName = slider.dataset.cssVar;
+        const unit = slider.dataset.unit;
+        const saved = vals[varName];
+        if (saved) {
+          slider.value = saved.val;
+          slider.nextElementSibling.textContent = saved.unit ? saved.val.toFixed(saved.unit === 'rem' ? 2 : 0) + saved.unit : saved.val.toFixed(2);
+        }
+      });
+    }
+
+    // --- Render preview into an iframe ---
+    function renderPreview(pIdx) {
+      if (pIdx === undefined) pIdx = activeIdx;
+      const p = players[pIdx];
+      const iframe = iframes[pIdx];
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+      let sectionsHtml = '';
+      for (const sid of p.sectionOrder) {
+        if (!p.sectionEnabled[sid]) continue;
+        switch (sid) {
+          case 'header':
+            sectionsHtml += `<div class="co-header">
+              <span class="co-code">${esc(p.editData.code)}</span>
+              <span class="co-wave">Wave ${p.editData.wave}</span>
+              <span class="co-biome">${esc(p.editData.biome)}</span>
+            </div>`;
+            break;
+          case 'party':
+            sectionsHtml += `<div class="co-section">
+              <div class="co-section-title">Emmel's Team</div>
+              <div class="co-party${p.partyCols === 2 ? ' cols-2' : ''}">${renderPartyHtml(p)}</div>
+            </div>`;
+            break;
+          case 'trainers':
+            sectionsHtml += `<div class="co-section">
+              <div class="co-section-title">Trainer</div>
+              <div class="co-trainers">${renderTrainersHtml(p)}</div>
+            </div>`;
+            break;
+          case 'gimmicks':
+            if (p.editData.gimmicks.length) {
+              sectionsHtml += `<div class="co-section co-section-small">
+                <div class="co-section-title">Gimmicks</div>
+                <div class="co-gimmicks">${renderGimmicksHtml(p)}</div>
+              </div>`;
+            }
+            break;
+          case 'vote':
+            if (p.editData.vote && p.editData.vote.options.length) {
+              sectionsHtml += `<div class="co-section co-section-small">
+                <div class="co-section-title">Abstimmung</div>
+                <div class="co-vote">${renderVoteHtml(p)}</div>
+              </div>`;
+            }
+            break;
+          case 'chat':
+            sectionsHtml += renderChatEmbedHtml(p);
+            break;
+          case 'pokemon':
+            sectionsHtml += renderPokemonEmbedHtml(p);
+            break;
+        }
+      }
+
+      doc.open();
+      doc.write(`<!DOCTYPE html><html><head>
+<link rel="stylesheet" href="overlay-community.css">
+</head><body>
+<div class="community-overlay">${sectionsHtml}</div>
+</body></html>`);
+      doc.close();
+
+      // Apply CSS vars
+      setTimeout(() => applyCssVarsToIframe(pIdx), 50);
+    }
+
+    function applyCssVarsToIframe(pIdx) {
+      const p = players[pIdx];
+      const iframe = iframes[pIdx];
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!doc || !doc.documentElement) return;
+      for (const [varName, { val, unit }] of Object.entries(p.cssVarValues)) {
+        const cssVal = unit ? val + unit : String(val);
+        doc.documentElement.style.setProperty(varName, cssVal);
+      }
+    }
+
+    // --- HTML renderers (take player state) ---
+    function renderPartyHtml(p) {
+      const slots = [...p.editData.party];
+      while (slots.length < 6) slots.push(null);
+      return slots.map(pk => {
+        if (!pk) {
+          return `<div class="co-pokemon empty">
+            <div class="co-pokemon-ball"><div class="co-pokeball-bg"></div></div>
+            <div class="co-pokemon-info"><span class="co-pokemon-name" style="color:var(--text-muted)">---</span></div>
+          </div>`;
+        }
+        const hpPct = pk.maxHp > 0 ? Math.round((pk.hp / pk.maxHp) * 100) : 100;
+        const hpClass = hpPct > 50 ? 'hp-high' : hpPct > 20 ? 'hp-mid' : 'hp-low';
+        const name = pk.nickname || pk.name;
+        const fainted = pk.hp <= 0 ? ' fainted' : '';
+        let shinySuffix = '';
+        if (pk.shiny) { const v = pk.shinyVariant || 1; shinySuffix = v === 1 ? 's' : `_${v}`; }
+        const spriteDiv = pk.speciesId ? `<img class="co-pokemon-sprite" src="${getIconPath(pk.speciesId + shinySuffix)}" onerror="this.style.display='none'" alt="">` : '';
+        return `<div class="co-pokemon${fainted}">
+          <div class="co-pokemon-ball"><div class="co-pokeball-bg"></div>${spriteDiv}</div>
+          <div class="co-pokemon-info">
+            <span class="co-pokemon-name">${esc(name)}</span>
+            <span class="co-pokemon-level">Lv${pk.level}</span>
+            <div class="co-hp-bar"><div class="co-hp-fill ${hpClass}" style="width:${hpPct}%"></div></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderTrainersHtml(p) {
+      const sorted = [...p.editData.trainers].sort((a, b) => a.waveIndex - b.waveIndex);
+      return sorted.map(t => {
+        const catClass = t.category || 'normal';
+        const partySize = t.customParty ? t.customParty.length : (t.originalParty ? t.originalParty.length : 0);
+        const claimed = !!t.claimedBy;
+        let statusText, statusClass;
+        if (claimed) { statusText = '@' + (t.claimedByName || '???'); statusClass = 'claimed'; }
+        else { statusText = 'Frei'; statusClass = 'free'; }
+        const dots = [];
+        for (let i = 0; i < partySize; i++) {
+          const hasClaim = t.pokemonNicknames && t.pokemonNicknames[i];
+          const isCustom = t.customParty && t.customParty[i];
+          dots.push(`<div class="co-party-dot${hasClaim ? ' claimed' : ''}${isCustom ? ' custom' : ''}"></div>`);
+        }
+        return `<div class="co-trainer">
+          <span class="co-trainer-wave ${catClass}">${t.waveIndex}</span>
+          <div class="co-trainer-info">
+            <div class="co-trainer-class">${esc(t.trainerClass)}</div>
+            <div class="co-trainer-party">${dots.join('')}</div>
+          </div>
+          <span class="co-trainer-status ${statusClass}">${esc(statusText)}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function renderGimmicksHtml(p) {
+      return p.editData.gimmicks.map(g => {
+        const dur = g.wavesLeft ? ` (${g.wavesLeft}W)` : '';
+        return `<span class="co-gimmick">${esc(g.label)}<span class="co-gimmick-duration">${dur}</span></span>`;
+      }).join('');
+    }
+
+    function renderVoteHtml(p) {
+      if (!p.editData.vote) return '';
+      const total = Object.values(p.editData.vote.tallies || {}).reduce((a, b) => a + b, 0);
+      return p.editData.vote.options.map(opt => {
+        const count = (p.editData.vote.tallies || {})[opt.id] || 0;
+        const pct = total > 0 ? Math.round(count / total * 100) : 0;
+        return `<div class="co-vote-option">
+          <div class="co-vote-bar" style="width:${pct}%"></div>
+          <div class="co-vote-label"><span>${esc(opt.label)}</span><span class="co-vote-pct">${pct}%</span></div>
+        </div>`;
+      }).join('');
+    }
+
+    function buildChatUrl(s) {
+      if (s.customUrl) return s.customUrl;
+      return `https://emmel.tv/widgets/chatoverlay?channel=${encodeURIComponent(s.channel)}&theme=${encodeURIComponent(s.theme)}&fs=${s.fontSize}&max=${s.maxMessages}&badges=1`;
+    }
+
+    function renderChatEmbedHtml(p) {
+      const s = p.embedSettings.chat;
+      const hStyle = s.height > 0 ? `height:${s.height}px` : 'flex:1;min-height:100px';
+      const wStyle = s.width > 0 ? `width:${s.width}px;margin:0 auto` : 'width:100%';
+      return `<div class="co-embed" style="${hStyle};${wStyle};border-radius:4px;overflow:hidden">
+        <iframe src="${esc(buildChatUrl(s))}" style="width:100%;height:100%;border:none;background:transparent" allow="autoplay"></iframe>
+      </div>`;
+    }
+
+    function buildPokemonUrl(s) {
+      if (s.customUrl) return s.customUrl;
+      return `https://emmel.tv/widgets/pokemon?style=${encodeURIComponent(s.style)}&position=center&vol=${s.volume}`;
+    }
+
+    function renderPokemonEmbedHtml(p) {
+      const s = p.embedSettings.pokemon;
+      const wStyle = s.width > 0 ? `width:${s.width}px;margin:0 auto` : 'width:100%';
+      return `<div class="co-embed" style="height:${s.height}px;${wStyle};border-radius:4px;overflow:hidden">
+        <iframe src="${esc(buildPokemonUrl(s))}" style="width:100%;height:100%;border:none;background:transparent" allow="autoplay"></iframe>
+      </div>`;
+    }
+
+    // --- Render controls (for active player) ---
+    function renderControls() {
+      const p = P();
+      const list = document.getElementById('section-list');
+      list.innerHTML = '';
+
+      for (const sid of p.sectionOrder) {
+        const def = SECTION_DEFS.find(s => s.id === sid);
+        const enabled = p.sectionEnabled[sid];
+
+        const el = document.createElement('div');
+        el.className = 'editor-section';
+        el.dataset.sectionId = sid;
+        el.draggable = true;
+
+        let bodyHtml = '';
+        switch (sid) {
+          case 'header': bodyHtml = renderHeaderControls(p); break;
+          case 'party': bodyHtml = renderPartyControls(p); break;
+          case 'trainers': bodyHtml = renderTrainerControls(p); break;
+          case 'gimmicks': bodyHtml = renderGimmickControls(p); break;
+          case 'vote': bodyHtml = renderVoteControls(p); break;
+          case 'chat': bodyHtml = renderChatControls(p); break;
+          case 'pokemon': bodyHtml = renderPokemonControls(p); break;
+        }
+
+        el.innerHTML = `
+          <div class="editor-section-header">
+            <span class="drag-handle">&#9776;</span>
+            <span class="section-name">${def.name}</span>
+            <div class="section-toggle ${enabled ? 'active' : ''}" data-section="${sid}"></div>
+          </div>
+          <div class="section-body ${enabled ? '' : 'hidden'}" data-body="${sid}">${bodyHtml}</div>
+        `;
+        list.appendChild(el);
+      }
+
+      // Bind toggle clicks
+      list.querySelectorAll('.section-toggle').forEach(toggle => {
+        toggle.addEventListener('click', () => {
+          const sid = toggle.dataset.section;
+          p.sectionEnabled[sid] = !p.sectionEnabled[sid];
+          toggle.classList.toggle('active');
+          list.querySelector(`[data-body="${sid}"]`).classList.toggle('hidden');
+          renderPreview(activeIdx);
+        });
+      });
+
+      setupDragAndDrop();
+      bindInputEvents();
+    }
+
+    function renderHeaderControls(p) {
+      return `
+        <div class="field-row"><span class="field-label">Code</span><input class="field-input field-input-sm" data-field="code" value="${esc(p.editData.code)}"></div>
+        <div class="field-row"><span class="field-label">Wave</span><input class="field-input field-input-sm" type="number" data-field="wave" value="${p.editData.wave}" min="0"></div>
+        <div class="field-row"><span class="field-label">Biome</span><input class="field-input" data-field="biome" value="${esc(p.editData.biome)}"></div>
+      `;
+    }
+
+    function renderPartyControls(p) {
+      let html = `<div class="field-row" style="margin-bottom:6px">
+        <span class="field-label">Layout</span>
+        <select class="field-input" id="party-cols-select" style="width:120px;flex:none">
+          <option value="3" ${p.partyCols===3?'selected':''}>3 x 2</option>
+          <option value="2" ${p.partyCols===2?'selected':''}>2 x 3</option>
+        </select>
+      </div>`;
+      p.editData.party.forEach((pk, i) => {
+        html += `<div class="poke-row">
+          <input class="field-input field-input-sm" type="number" data-party-field="speciesId" data-index="${i}" value="${pk.speciesId || ''}" placeholder="ID" title="Species ID">
+          <input class="field-input" style="flex:2" data-party-field="name" data-index="${i}" value="${esc(pk.name)}" placeholder="Name">
+          <input class="field-input" style="flex:1.5" data-party-field="nickname" data-index="${i}" value="${esc(pk.nickname || '')}" placeholder="Spitzname">
+          <input class="field-input field-input-sm" type="number" data-party-field="level" data-index="${i}" value="${pk.level}" min="1" max="100" title="Level">
+          <input class="field-input field-input-sm" type="number" data-party-field="hp" data-index="${i}" value="${pk.hp}" min="0" title="HP">
+          <span style="color:var(--text-muted);font-size:0.7rem">/</span>
+          <input class="field-input field-input-sm" type="number" data-party-field="maxHp" data-index="${i}" value="${pk.maxHp}" min="1" title="Max HP">
+          <button class="btn-remove" data-remove-party="${i}">&#10005;</button>
+        </div>`;
+      });
+      html += `<button class="btn-add" id="btn-add-pokemon">+ Pokemon</button>`;
+      return html;
+    }
+
+    function renderTrainerControls(p) {
+      let html = '';
+      p.editData.trainers.forEach((t, i) => {
+        html += `<div class="trainer-card">
+          <div class="trainer-card-header">
+            <input class="field-input field-input-sm" type="number" data-trainer-field="waveIndex" data-index="${i}" value="${t.waveIndex}" min="1" placeholder="Wave">
+            <input class="field-input" data-trainer-field="trainerClass" data-index="${i}" value="${esc(t.trainerClass)}" placeholder="Klasse">
+            <select class="field-input" style="width:110px;flex:none" data-trainer-field="category" data-index="${i}">
+              ${['normal','boss','rival','evil_team','gym_leader','elite_four','champion'].map(c => `<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join('')}
+            </select>
+            <button class="btn-remove" data-remove-trainer="${i}">&#10005;</button>
+          </div>
+          <div class="field-row">
+            <span class="field-label" style="font-size:0.65rem">Claimed by</span>
+            <input class="field-input" data-trainer-field="claimedByName" data-index="${i}" value="${esc(t.claimedByName || '')}" placeholder="Username (leer = frei)">
+          </div>
+          <div class="field-row">
+            <span class="field-label" style="font-size:0.65rem">Party Size</span>
+            <input class="field-input field-input-sm" type="number" data-trainer-field="partySize" data-index="${i}" value="${t.originalParty ? t.originalParty.length : 3}" min="1" max="6">
+          </div>
+        </div>`;
+      });
+      html += `<button class="btn-add" id="btn-add-trainer">+ Trainer</button>`;
+      return html;
+    }
+
+    function renderGimmickControls(p) {
+      let html = '<div class="tag-list">';
+      p.editData.gimmicks.forEach((g, i) => {
+        html += `<span class="tag">${esc(g.label)} (${g.wavesLeft}W) <button class="btn-remove" data-remove-gimmick="${i}" style="font-size:0.65rem">&#10005;</button></span>`;
+      });
+      html += '</div>';
+      html += `<div class="field-row" style="margin-top:4px">
+        <input class="field-input" id="gimmick-name" placeholder="Gimmick Name">
+        <input class="field-input field-input-sm" id="gimmick-waves" type="number" value="3" min="1" max="20">
+        <button class="btn-add" id="btn-add-gimmick">+</button>
+      </div>`;
+      return html;
+    }
+
+    function renderVoteControls(p) {
+      if (!p.editData.vote) p.editData.vote = { options: [], tallies: {}, expiresAt: null };
+      let html = '';
+      p.editData.vote.options.forEach((opt, i) => {
+        const count = p.editData.vote.tallies[opt.id] || 0;
+        html += `<div class="field-row">
+          <input class="field-input" data-vote-field="label" data-index="${i}" value="${esc(opt.label)}" placeholder="Option">
+          <input class="field-input field-input-sm" type="number" data-vote-field="count" data-index="${i}" value="${count}" min="0">
+          <button class="btn-remove" data-remove-vote="${i}">&#10005;</button>
+        </div>`;
+      });
+      html += `<button class="btn-add" id="btn-add-vote">+ Option</button>`;
+      return html;
+    }
+
+    function renderChatControls(p) {
+      const s = p.embedSettings.chat;
+      return `
+        <div class="field-row"><span class="field-label">Channel</span><input class="field-input" id="chat-channel" value="${esc(s.channel)}" placeholder="janemmel"></div>
+        <div class="field-row"><span class="field-label">Theme</span>
+          <select class="field-input" id="chat-theme" style="width:120px;flex:none">
+            ${['clean','neon','glass','bubble','terminal','compact'].map(t => `<option value="${t}" ${s.theme===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row"><span class="field-label">Schriftgroesse</span><input class="field-input field-input-sm" type="number" id="chat-fs" value="${s.fontSize}" min="8" max="24"></div>
+        <div class="field-row"><span class="field-label">Max Nachrichten</span><input class="field-input field-input-sm" type="number" id="chat-max" value="${s.maxMessages}" min="5" max="50"></div>
+        <div class="field-row"><span class="field-label">Breite (px)</span><input class="field-input field-input-sm" type="number" id="chat-width" value="${s.width}" min="0" max="800" title="0 = volle Breite"><span class="hint">0 = volle Breite</span></div>
+        <div class="field-row"><span class="field-label">Hoehe (px)</span><input class="field-input field-input-sm" type="number" id="chat-height" value="${s.height}" min="0" max="900" title="0 = restlicher Platz"><span class="hint">0 = fuellt Rest</span></div>
+        <div class="field-row"><span class="field-label">Custom URL</span><input class="field-input" id="chat-custom-url" value="${esc(s.customUrl)}" placeholder="Leer = automatisch"></div>
+        <div class="hint">Nutzt das Chat Overlay Widget von emmel.tv (7TV, BTTV, FFZ Emotes)</div>
+      `;
+    }
+
+    function renderPokemonControls(p) {
+      const s = p.embedSettings.pokemon;
+      return `
+        <div class="field-row"><span class="field-label">Style</span>
+          <select class="field-input" id="pokemon-style" style="width:120px;flex:none">
+            ${['classic','minimal','retro'].map(t => `<option value="${t}" ${s.style===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row"><span class="field-label">Breite (px)</span><input class="field-input field-input-sm" type="number" id="pokemon-width" value="${s.width}" min="0" max="800" title="0 = volle Breite"><span class="hint">0 = volle Breite</span></div>
+        <div class="field-row"><span class="field-label">Hoehe (px)</span><input class="field-input field-input-sm" type="number" id="pokemon-height" value="${s.height}" min="50" max="600"></div>
+        <div class="field-row"><span class="field-label">Lautstaerke</span><input class="field-input field-input-sm" type="number" id="pokemon-volume" value="${s.volume}" min="0" max="100" title="0-100">%</div>
+        <div class="field-row"><span class="field-label">Custom URL</span><input class="field-input" id="pokemon-custom-url" value="${esc(s.customUrl)}" placeholder="Leer = automatisch"></div>
+        <div class="hint">Nutzt das Pokemon Catch Widget von emmel.tv</div>
+      `;
+    }
+
+    // --- Input events ---
+    function bindInputEvents() {
+      const p = P();
+      const list = document.getElementById('section-list');
+
+      // Header fields
+      list.querySelectorAll('[data-field]').forEach(input => {
+        input.addEventListener('input', () => {
+          const field = input.dataset.field;
+          p.editData[field] = field === 'wave' ? parseInt(input.value) || 0 : input.value;
+          renderPreview(activeIdx);
+        });
+      });
+
+      // Party columns
+      const colsSelect = document.getElementById('party-cols-select');
+      if (colsSelect) {
+        colsSelect.addEventListener('change', () => {
+          p.partyCols = parseInt(colsSelect.value);
+          renderPreview(activeIdx);
+        });
+      }
+
+      // Party fields
+      list.querySelectorAll('[data-party-field]').forEach(input => {
+        input.addEventListener('input', () => {
+          const idx = parseInt(input.dataset.index);
+          const field = input.dataset.partyField;
+          if (['level','hp','maxHp','speciesId'].includes(field)) {
+            p.editData.party[idx][field] = parseInt(input.value) || 0;
+          } else {
+            p.editData.party[idx][field] = input.value;
+          }
+          renderPreview(activeIdx);
+        });
+      });
+
+      list.querySelectorAll('[data-remove-party]').forEach(btn => {
+        btn.addEventListener('click', () => { p.editData.party.splice(parseInt(btn.dataset.removeParty), 1); renderControls(); renderPreview(activeIdx); });
+      });
+
+      const btnAddPoke = document.getElementById('btn-add-pokemon');
+      if (btnAddPoke) btnAddPoke.addEventListener('click', () => { p.editData.party.push({ name: 'Bisasam', speciesId: 1, level: 10, hp: 40, maxHp: 45, nickname: '', shiny: false }); renderControls(); renderPreview(activeIdx); });
+
+      // Trainer fields
+      list.querySelectorAll('[data-trainer-field]').forEach(input => {
+        const handler = () => {
+          const idx = parseInt(input.dataset.index);
+          const field = input.dataset.trainerField;
+          if (field === 'waveIndex' || field === 'partySize') {
+            const val = parseInt(input.value) || 1;
+            if (field === 'partySize') p.editData.trainers[idx].originalParty = new Array(val).fill(1);
+            else p.editData.trainers[idx][field] = val;
+          } else if (field === 'claimedByName') {
+            p.editData.trainers[idx].claimedByName = input.value || null;
+            p.editData.trainers[idx].claimedBy = input.value ? 'user' : null;
+          } else {
+            p.editData.trainers[idx][field] = input.value;
+          }
+          renderPreview(activeIdx);
+        };
+        input.addEventListener('input', handler);
+        input.addEventListener('change', handler);
+      });
+
+      list.querySelectorAll('[data-remove-trainer]').forEach(btn => {
+        btn.addEventListener('click', () => { p.editData.trainers.splice(parseInt(btn.dataset.removeTrainer), 1); renderControls(); renderPreview(activeIdx); });
+      });
+
+      const btnAddTrainer = document.getElementById('btn-add-trainer');
+      if (btnAddTrainer) btnAddTrainer.addEventListener('click', () => {
+        p.editData.trainers.push({ waveIndex: (p.editData.trainers.length ? Math.max(...p.editData.trainers.map(t => t.waveIndex)) + 5 : 5), category: 'normal', trainerClass: 'Trainer', claimedBy: null, claimedByName: null, customParty: null, originalParty: [1,2,3], pokemonNicknames: {} });
+        renderControls(); renderPreview(activeIdx);
+      });
+
+      // Gimmicks
+      list.querySelectorAll('[data-remove-gimmick]').forEach(btn => {
+        btn.addEventListener('click', () => { p.editData.gimmicks.splice(parseInt(btn.dataset.removeGimmick), 1); renderControls(); renderPreview(activeIdx); });
+      });
+      const btnAddGimmick = document.getElementById('btn-add-gimmick');
+      if (btnAddGimmick) btnAddGimmick.addEventListener('click', () => {
+        const nameInput = document.getElementById('gimmick-name');
+        const name = nameInput.value.trim();
+        if (!name) return;
+        p.editData.gimmicks.push({ id: 'g_' + Date.now(), label: name, wavesLeft: parseInt(document.getElementById('gimmick-waves').value) || 3 });
+        nameInput.value = '';
+        renderControls(); renderPreview(activeIdx);
+      });
+
+      // Vote
+      list.querySelectorAll('[data-vote-field]').forEach(input => {
+        input.addEventListener('input', () => {
+          const idx = parseInt(input.dataset.index);
+          if (input.dataset.voteField === 'label') p.editData.vote.options[idx].label = input.value;
+          else p.editData.vote.tallies[p.editData.vote.options[idx].id] = parseInt(input.value) || 0;
+          renderPreview(activeIdx);
+        });
+      });
+      list.querySelectorAll('[data-remove-vote]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.removeVote);
+          delete p.editData.vote.tallies[p.editData.vote.options[idx].id];
+          p.editData.vote.options.splice(idx, 1);
+          renderControls(); renderPreview(activeIdx);
+        });
+      });
+      const btnAddVote = document.getElementById('btn-add-vote');
+      if (btnAddVote) btnAddVote.addEventListener('click', () => {
+        const id = 'opt_' + Date.now();
+        p.editData.vote.options.push({ id, label: 'Neue Option' });
+        p.editData.vote.tallies[id] = 0;
+        renderControls(); renderPreview(activeIdx);
+      });
+
+      // Embed fields
+      bindEmbed('chat-channel', v => { p.embedSettings.chat.channel = v; });
+      bindEmbed('chat-theme', v => { p.embedSettings.chat.theme = v; }, true);
+      bindEmbed('chat-fs', v => { p.embedSettings.chat.fontSize = parseInt(v) || 13; });
+      bindEmbed('chat-max', v => { p.embedSettings.chat.maxMessages = parseInt(v) || 20; });
+      bindEmbed('chat-width', v => { p.embedSettings.chat.width = parseInt(v) || 0; });
+      bindEmbed('chat-height', v => { p.embedSettings.chat.height = parseInt(v) || 0; });
+      bindEmbed('chat-custom-url', v => { p.embedSettings.chat.customUrl = v; });
+      bindEmbed('pokemon-style', v => { p.embedSettings.pokemon.style = v; }, true);
+      bindEmbed('pokemon-width', v => { p.embedSettings.pokemon.width = parseInt(v) || 0; });
+      bindEmbed('pokemon-height', v => { p.embedSettings.pokemon.height = parseInt(v) || 250; });
+      bindEmbed('pokemon-volume', v => { p.embedSettings.pokemon.volume = Math.max(0, Math.min(100, parseInt(v) || 0)); });
+      bindEmbed('pokemon-custom-url', v => { p.embedSettings.pokemon.customUrl = v; });
+    }
+
+    function bindEmbed(id, setter, isSelect) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener(isSelect ? 'change' : 'input', () => { setter(el.value); renderPreview(activeIdx); });
+    }
+
+    // --- Drag & Drop ---
+    function setupDragAndDrop() {
+      const list = document.getElementById('section-list');
+      let dragSrc = null;
+      list.querySelectorAll('.editor-section').forEach(el => {
+        el.addEventListener('dragstart', (e) => { dragSrc = el; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', el.dataset.sectionId); });
+        el.addEventListener('dragend', () => { el.classList.remove('dragging'); list.querySelectorAll('.editor-section').forEach(s => s.classList.remove('drag-over')); });
+        el.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (el !== dragSrc) { list.querySelectorAll('.editor-section').forEach(s => s.classList.remove('drag-over')); el.classList.add('drag-over'); } });
+        el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          if (el === dragSrc) return;
+          el.classList.remove('drag-over');
+          const p = P();
+          const fromId = dragSrc.dataset.sectionId;
+          const toId = el.dataset.sectionId;
+          const fromIdx = p.sectionOrder.indexOf(fromId);
+          const toIdx = p.sectionOrder.indexOf(toId);
+          p.sectionOrder.splice(fromIdx, 1);
+          p.sectionOrder.splice(toIdx, 0, fromId);
+          renderControls();
+          renderPreview(activeIdx);
+        });
+      });
+    }
+
+    // --- Helpers ---
+    function esc(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // --- CSS Variable Sliders ---
+    const cssVarDefaults = {};
+
+    function initStyleSliders() {
+      document.querySelectorAll('[data-css-var]').forEach(slider => {
+        const varName = slider.dataset.cssVar;
+        const unit = slider.dataset.unit;
+        const defaultVal = parseFloat(slider.value);
+        cssVarDefaults[varName] = { val: defaultVal, unit };
+
+        // Init both players with defaults
+        players.forEach(p => {
+          if (!p.cssVarValues[varName]) p.cssVarValues[varName] = { val: defaultVal, unit };
+        });
+
+        slider.addEventListener('input', () => {
+          const val = parseFloat(slider.value);
+          const p = P();
+          p.cssVarValues[varName] = { val, unit };
+          slider.nextElementSibling.textContent = unit ? val.toFixed(unit === 'rem' ? 2 : 0) + unit : val.toFixed(2);
+          applyCssVarsToIframe(activeIdx);
+        });
+      });
+    }
+
+    // Reset buttons
+    document.getElementById('btn-reset-fonts').addEventListener('click', () => {
+      document.querySelectorAll('#style-body-fonts [data-css-var]').forEach(slider => {
+        const varName = slider.dataset.cssVar;
+        const def = cssVarDefaults[varName];
+        slider.value = def.val;
+        P().cssVarValues[varName] = { ...def };
+        slider.nextElementSibling.textContent = def.unit ? def.val.toFixed(def.unit === 'rem' ? 2 : 0) + def.unit : def.val.toFixed(2);
+      });
+      applyCssVarsToIframe(activeIdx);
+    });
+
+    document.getElementById('btn-reset-sizes').addEventListener('click', () => {
+      document.querySelectorAll('#style-body-sizes [data-css-var]').forEach(slider => {
+        const varName = slider.dataset.cssVar;
+        const def = cssVarDefaults[varName];
+        slider.value = def.val;
+        P().cssVarValues[varName] = { ...def };
+        slider.nextElementSibling.textContent = def.unit ? def.val.toFixed(def.unit === 'rem' ? 2 : 0) + def.unit : def.val.toFixed(2);
+      });
+      applyCssVarsToIframe(activeIdx);
+    });
+
+    // --- Generate URL params for a player ---
+    function generatePlayerParams(pIdx) {
+      const p = players[pIdx];
+      let lines = ['/* CSS Variables */', ':root {'];
+      for (const [varName, { val, unit }] of Object.entries(p.cssVarValues)) {
+        lines.push(`  ${varName}: ${unit ? val + unit : val};`);
+      }
+      lines.push('}');
+      lines.push('');
+      lines.push('/* Overlay URL Params */');
+      const urlParams = [];
+      if (p.sectionEnabled.chat) {
+        const c = p.embedSettings.chat;
+        urlParams.push('chat=1');
+        if (c.customUrl) urlParams.push('chatUrl=' + encodeURIComponent(c.customUrl));
+        else {
+          urlParams.push('chatChannel=' + encodeURIComponent(c.channel));
+          urlParams.push('chatTheme=' + encodeURIComponent(c.theme));
+          urlParams.push('chatFs=' + c.fontSize);
+          urlParams.push('chatMax=' + c.maxMessages);
+        }
+        if (c.width > 0) urlParams.push('chatW=' + c.width);
+        if (c.height > 0) urlParams.push('chatH=' + c.height);
+      }
+      if (p.sectionEnabled.pokemon) {
+        const pk = p.embedSettings.pokemon;
+        urlParams.push('pokemon=1');
+        if (pk.customUrl) urlParams.push('pokemonUrl=' + encodeURIComponent(pk.customUrl));
+        else urlParams.push('pokemonStyle=' + encodeURIComponent(pk.style));
+        if (pk.width > 0) urlParams.push('pokemonW=' + pk.width);
+        urlParams.push('pokemonH=' + pk.height);
+        urlParams.push('pokemonVol=' + pk.volume);
+      }
+      if (urlParams.length) lines.push(urlParams.join('&'));
+      return lines.join('\n');
+    }
+
+    // Copy active player
+    document.getElementById('btn-copy-settings').addEventListener('click', () => {
+      saveCssVars();
+      const text = `/* Spieler ${activeIdx + 1} */\n` + generatePlayerParams(activeIdx);
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btn-copy-settings');
+        btn.textContent = 'Kopiert!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Einstellungen kopieren (aktiver Spieler)'; btn.classList.remove('copied'); }, 2000);
+      });
+    });
+
+    // Copy both players
+    document.getElementById('btn-copy-both').addEventListener('click', () => {
+      saveCssVars();
+      const text = `/* === Spieler 1 === */\n${generatePlayerParams(0)}\n\n/* === Spieler 2 === */\n${generatePlayerParams(1)}`;
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('btn-copy-both');
+        btn.textContent = 'Kopiert!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Beide Spieler kopieren'; btn.classList.remove('copied'); }, 2000);
+      });
+    });
+
+    // --- Init ---
+    renderControls();
+    initStyleSliders();
+    setTimeout(() => {
+      renderPreview(0);
+      renderPreview(1);
+    }, 100);
+  </script>
+</body>
+</html>

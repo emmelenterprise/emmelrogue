@@ -1,5 +1,8 @@
 import { pokerogueApi } from "#api/pokerogue-api";
 import { clientSessionId } from "#app/account";
+import { raceManager } from "#app/emmelrogue/race-manager";
+import { chatTrainers } from "#app/emmelrogue/chat-trainers";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { globalScene } from "#app/global-scene";
 import { pokemonEvolutions } from "#balance/pokemon-evolutions";
 import { bypassLogin } from "#constants/app-constants";
@@ -45,6 +48,98 @@ export class GameOverPhase extends BattlePhase {
     super.start();
 
     globalScene.phaseManager.hideAbilityBar();
+
+    // PvP mode: loss — report result and redirect to lobby
+    if (!this.isVictory && pvpBattle.isPvpActive()) {
+      pvpBattle.reportResult("loss");
+      globalScene.phaseManager.clearPhaseQueue();
+      globalScene.ui.showText("PvP-Kampf verloren!", null, () => {
+        globalScene.time.delayedCall(2000, () => {
+          pvpBattle.endBattle();
+          window.location.href = "/lobby/";
+        });
+      });
+      this.end();
+      return;
+    }
+
+    // Race mode: always respawn on full wipe — heal party and restart from wave 1
+    if (!this.isVictory && raceManager.isRaceMode()) {
+      const wave = globalScene.currentBattle?.waveIndex ?? 0;
+      const wipeNum = raceManager.incrementWipeCount();
+      raceManager.reportProgress(wave, "wiped");
+      console.log(`[Race] Respawn on wipe #${wipeNum} at wave ${wave} — restarting from wave 1`);
+
+      globalScene.ui.fadeOut(1000).then(() => {
+        // Clear all active Pokemon sprites from the field before respawn
+        const activeBattlers = globalScene.getField().filter(p => p?.isActive(true));
+        for (const pokemon of activeBattlers) {
+          pokemon.hideInfo();
+          pokemon.setVisible(false);
+        }
+
+        // Destroy all enemy Pokemon
+        for (const p of globalScene.getEnemyParty()) {
+          p.destroy();
+        }
+
+        const party = globalScene.getPlayerParty();
+
+        if (party.length > 0) {
+          // Heal all surviving party Pokemon and hide them (SummonPhase will re-show)
+          for (const pokemon of party) {
+            pokemon.hp = pokemon.getMaxHp();
+            pokemon.resetStatus(true, true, false, false);
+            pokemon.resetSummonData();
+            pokemon.setVisible(false);
+          }
+        } else {
+          // Party empty (Nuzlocke) — recreate starters
+          const starterIds = raceManager.getStarters();
+          if (starterIds && starterIds.length > 0) {
+            for (const speciesId of starterIds) {
+              const species = getPokemonSpecies(speciesId);
+              if (species) {
+                globalScene.addPlayerPokemon(species, 5);
+              }
+            }
+            console.log(`[Race] Recreated ${starterIds.length} starters for respawn`);
+          }
+        }
+
+        // Clear modifiers from the bars
+        globalScene.modifierBar.removeAll(true);
+        globalScene.enemyModifierBar.removeAll(true);
+        globalScene.enemyModifiers = [];
+
+        // Reset arena and battle to wave 1
+        globalScene.phaseManager.clearPhaseQueue();
+        globalScene.newArena(globalScene.gameMode.getStartingBiome());
+
+        globalScene.phaseManager.pushNew("EncounterPhase", false);
+        globalScene.phaseManager.pushNew("SummonPhase", 0, true, true);
+
+        globalScene.ui.fadeIn(1000);
+        this.end();
+      });
+      return;
+    }
+
+    // Report race result
+    if (raceManager.isRaceMode()) {
+      const wave = globalScene.currentBattle?.waveIndex ?? 0;
+      raceManager.reportProgress(wave, this.isVictory ? "victory" : "defeated");
+    }
+
+    // End chat trainer session (only P1/solo ends, P2 just clears local state)
+    if (chatTrainers.isActive()) {
+      if (!raceManager.isRaceMode() || raceManager.getPlayerNumber() === 1) {
+        chatTrainers.endSession();
+      } else {
+        // P2: clear local state without telling server to destroy the session
+        chatTrainers.clearLocalState();
+      }
+    }
 
     // Failsafe if players somehow skip floor 200 in classic mode
     if (globalScene.gameMode.isClassic && globalScene.currentBattle.waveIndex > 200) {

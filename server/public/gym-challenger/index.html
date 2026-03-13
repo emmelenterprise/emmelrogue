@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue — Gym Challenge</title>
+  <link rel="stylesheet" href="gym-challenger.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div class="header-left">
+        <h1>EmmelRogue</h1>
+        <span class="subtitle">GYM CHALLENGE</span>
+      </div>
+      <div class="header-right">
+        <div id="user-info" style="display:none">
+          <img id="user-avatar" src="" alt="Avatar" class="avatar">
+          <span id="user-name"></span>
+          <button id="btn-logout" class="btn btn-small" onclick="logoutTwitch()">Logout</button>
+        </div>
+        <button id="btn-login" class="btn btn-twitch" onclick="loginTwitch()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+          Twitch Login
+        </button>
+      </div>
+    </header>
+
+    <!-- No Session -->
+    <div id="no-session" class="center-message">
+      <h2>Kein Gym aktiv</h2>
+      <p>Warte auf den Gym Leader...</p>
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Main -->
+    <div id="main" style="display:none">
+      <!-- Boss Info -->
+      <div class="panel boss-panel">
+        <h2>Gym Leader</h2>
+        <div id="boss-info" class="boss-info"></div>
+      </div>
+
+      <!-- Two-column layout -->
+      <div class="content-grid">
+        <!-- Team Builder -->
+        <div class="panel">
+          <h2>Dein Team</h2>
+          <div class="budget-info">
+            Budget: <strong id="my-cost">0</strong> / <strong id="my-budget">10</strong>
+            | Pokemon: <strong id="my-poke-count">0</strong> / <strong id="my-poke-max">3</strong>
+            <span id="role-badge" class="role-badge"></span>
+          </div>
+          <div id="my-team" class="team-grid"></div>
+          <button id="btn-import" class="btn btn-import" onclick="importCommunityTeam()" style="display:none">Community-Team importieren</button>
+          <div class="pokemon-search">
+            <input type="text" id="pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+            <div id="search-results" class="search-results"></div>
+          </div>
+
+          <!-- Trainer Lines -->
+          <div class="trainer-lines-form">
+            <h3>Trainer-Sprueche (optional)</h3>
+            <div class="line-input">
+              <label>Intro:</label>
+              <input type="text" id="line-intro" maxlength="100" placeholder="Dein Intro-Spruch...">
+            </div>
+            <div class="line-input">
+              <label>Sieg:</label>
+              <input type="text" id="line-victory" maxlength="100" placeholder="Wenn du gewinnst...">
+            </div>
+            <div class="line-input">
+              <label>Niederlage:</label>
+              <input type="text" id="line-defeat" maxlength="100" placeholder="Wenn du verlierst...">
+            </div>
+          </div>
+
+          <!-- Sprite Select -->
+          <div class="sprite-picker">
+            <h3>Trainer Sprite</h3>
+            <div class="sprite-picker-current" onclick="toggleSpriteGrid('my')">
+              <div id="my-sprite-preview" class="sprite-preview-large"></div>
+              <span id="my-sprite-label">Waehle einen Sprite...</span>
+              <span class="sprite-picker-arrow">&#9660;</span>
+            </div>
+            <div class="sprite-search" id="my-sprite-search" style="display:none">
+              <input type="text" id="my-sprite-filter" placeholder="Sprite suchen..." autocomplete="off">
+            </div>
+            <div class="sprite-grid" id="my-sprite-grid" style="display:none"></div>
+          </div>
+          <input type="hidden" id="my-sprite" value="youngster">
+
+          <!-- Join Button -->
+          <button id="btn-join" class="btn btn-accent btn-large" onclick="joinQueue()">In die Warteschlange!</button>
+          <button id="btn-leave" class="btn btn-danger btn-large" onclick="leaveQueue()" style="display:none">Warteschlange verlassen</button>
+          <div id="join-error" class="error-text" style="display:none"></div>
+          <div id="join-success" class="success-text" style="display:none"></div>
+        </div>
+
+        <!-- Queue & Status -->
+        <div class="panel">
+          <h2>Warteschlange</h2>
+          <div id="current-challenger" class="current-challenger-info"></div>
+          <div id="queue-list" class="queue-list"></div>
+
+          <!-- Leaderboard -->
+          <h2 style="margin-top:20px">Leaderboard</h2>
+          <div id="leaderboard" class="leaderboard-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="gym-challenger.js"></script>
+</body>
+</html>

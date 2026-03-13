@@ -19,6 +19,7 @@ import type { PokemonSpecies } from "#data/pokemon-species";
 import { loadPositionalTag } from "#data/positional-tags/load-positional-tag";
 import { TerrainType } from "#data/terrain";
 import { AbilityAttr } from "#enums/ability-attr";
+import { Passive } from "#enums/passive";
 import { BattleType } from "#enums/battle-type";
 import { ChallengeType } from "#enums/challenge-type";
 import { Device } from "#enums/devices";
@@ -166,11 +167,12 @@ export class GameData {
     this.starterData = {};
     this.gameStats = new GameStats();
     this.runHistory = {};
+    // EmmelRogue: Everything unlocked
     this.unlocks = {
-      [Unlockables.ENDLESS_MODE]: false,
-      [Unlockables.MINI_BLACK_HOLE]: false,
-      [Unlockables.SPLICED_ENDLESS_MODE]: false,
-      [Unlockables.EVIOLITE]: false,
+      [Unlockables.ENDLESS_MODE]: true,
+      [Unlockables.MINI_BLACK_HOLE]: true,
+      [Unlockables.SPLICED_ENDLESS_MODE]: true,
+      [Unlockables.EVIOLITE]: true,
     };
     this.achvUnlocks = {};
     this.voucherUnlocks = {};
@@ -1495,43 +1497,27 @@ export class GameData {
   private initDexData(): void {
     const data: DexData = {};
 
+    // EmmelRogue: Unlock ALL Pokemon with all variants, forms, genders, shinies
+    const allNaturesMask = (() => {
+      let mask = 0;
+      for (let n = 0; n < 25; n++) {
+        mask |= 1 << (n + 1);
+      }
+      return mask;
+    })();
+
     for (const species of allSpecies) {
+      const fullAttr = species.getFullUnlocksData();
       data[species.speciesId] = {
-        seenAttr: 0n,
-        caughtAttr: 0n,
-        natureAttr: 0,
-        seenCount: 0,
-        caughtCount: 0,
+        seenAttr: fullAttr,
+        caughtAttr: fullAttr,
+        natureAttr: allNaturesMask,
+        seenCount: 1,
+        caughtCount: 1,
         hatchedCount: 0,
-        ivs: [0, 0, 0, 0, 0, 0],
+        ivs: [31, 31, 31, 31, 31, 31],
         ribbons: new RibbonData(0),
       };
-    }
-
-    const defaultStarterAttr =
-      DexAttr.NON_SHINY | DexAttr.MALE | DexAttr.FEMALE | DexAttr.DEFAULT_VARIANT | DexAttr.DEFAULT_FORM;
-
-    const defaultStarterNatures: Nature[] = [];
-
-    globalScene.executeWithSeedOffset(
-      () => {
-        const neutralNatures = [Nature.HARDY, Nature.DOCILE, Nature.SERIOUS, Nature.BASHFUL, Nature.QUIRKY];
-        for (const _ of defaultStarterSpecies) {
-          defaultStarterNatures.push(randSeedItem(neutralNatures));
-        }
-      },
-      0,
-      "default",
-    );
-
-    for (let ds = 0; ds < defaultStarterSpecies.length; ds++) {
-      const entry = data[defaultStarterSpecies[ds]] as DexEntry;
-      entry.seenAttr = defaultStarterAttr;
-      entry.caughtAttr = defaultStarterAttr;
-      entry.natureAttr = 1 << (defaultStarterNatures[ds] + 1);
-      for (const i in entry.ivs) {
-        entry.ivs[i] = 15;
-      }
     }
 
     this.defaultDexData = { ...data };
@@ -1543,16 +1529,17 @@ export class GameData {
 
     const starterSpeciesIds = Object.keys(speciesStarterCosts).map(k => Number.parseInt(k) as SpeciesId);
 
+    // EmmelRogue: Unlock ALL abilities, passives, egg moves, max candy
     for (const speciesId of starterSpeciesIds) {
       starterData[speciesId] = {
         moveset: null,
-        eggMoves: 0,
-        candyCount: 0,
-        friendship: 0,
-        abilityAttr: defaultStarterSpecies.includes(speciesId) ? AbilityAttr.ABILITY_1 : 0,
-        passiveAttr: 0,
-        valueReduction: 0,
-        classicWinCount: 0,
+        eggMoves: 0b1111, // All 4 egg moves unlocked
+        candyCount: MAX_STARTER_CANDY_COUNT,
+        friendship: 300,
+        abilityAttr: AbilityAttr.ABILITY_1 | AbilityAttr.ABILITY_2 | AbilityAttr.ABILITY_HIDDEN,
+        passiveAttr: Passive.UNLOCKED | Passive.ENABLED,
+        valueReduction: 3, // Max cost reduction
+        classicWinCount: 1,
       };
     }
 

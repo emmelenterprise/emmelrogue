@@ -1,5 +1,8 @@
 import { applyAbAttrs } from "#abilities/apply-ab-attrs";
 import { PLAYER_PARTY_MAX_SIZE, WEIGHT_INCREMENT_ON_SPAWN_MISS } from "#app/constants";
+import { raceManager } from "#app/emmelrogue/race-manager";
+import { chatTrainers } from "#app/emmelrogue/chat-trainers";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import Overrides from "#app/overrides";
@@ -17,6 +20,9 @@ import { MysteryEncounterMode } from "#enums/mystery-encounter-mode";
 import { PlayerGender } from "#enums/player-gender";
 import { SpeciesId } from "#enums/species-id";
 import { TrainerSlot } from "#enums/trainer-slot";
+import { TrainerType } from "#enums/trainer-type";
+import { TrainerVariant } from "#enums/trainer-variant";
+import { Trainer } from "#field/trainer";
 import { UiMode } from "#enums/ui-mode";
 import { EncounterPhaseEvent } from "#events/battle-scene";
 import type { Pokemon } from "#field/pokemon";
@@ -34,6 +40,7 @@ import { getGoldenBugNetSpecies } from "#mystery-encounters/encounter-pokemon-ut
 import { BattlePhase } from "#phases/battle-phase";
 import { achvs } from "#system/achv";
 import { randSeedInt, randSeedItem } from "#utils/common";
+import { getPokemonSpecies } from "#utils/pokemon-utils";
 import i18next from "i18next";
 
 export class EncounterPhase extends BattlePhase {
@@ -47,7 +54,7 @@ export class EncounterPhase extends BattlePhase {
     this.loaded = loaded;
   }
 
-  start() {
+  async start() {
     super.start();
 
     globalScene.updateGameInfo();
@@ -55,6 +62,28 @@ export class EncounterPhase extends BattlePhase {
     globalScene.initSession();
 
     globalScene.eventTarget.dispatchEvent(new EncounterPhaseEvent());
+
+    // Wait for PvP config if PvP mode is active (fixes race condition with async fetch)
+    if (pvpBattle.isPvpActive()) {
+      await pvpBattle.waitForConfig();
+    }
+
+    // Nuzlocke: remove all fainted Pokemon from party at the start of each encounter
+    // Done here (not during faint) to avoid breaking the SwitchPhase party-index logic
+    if (raceManager.isRaceMode() && raceManager.getNuzlockeDeath()) {
+      const party = globalScene.getPlayerParty();
+      for (let i = party.length - 1; i >= 0; i--) {
+        if (party[i].isFainted()) {
+          console.log(`[Race] Nuzlocke: removing fainted ${party[i].name} from party`);
+          party.splice(i, 1);
+        }
+      }
+    }
+
+    // Report wave progress for race mode
+    if (raceManager.isRaceMode()) {
+      raceManager.reportProgress(globalScene.currentBattle.waveIndex, "playing");
+    }
 
     // Failsafe if players somehow skip floor 200 in classic mode
     if (globalScene.gameMode.isClassic && globalScene.currentBattle.waveIndex > 200) {
@@ -64,6 +93,11 @@ export class EncounterPhase extends BattlePhase {
     const loadEnemyAssets: Promise<void>[] = [];
 
     const battle = globalScene.currentBattle;
+
+    // DEBUG: Log encounter state for trainer battles (always, regardless of chatTrainers)
+    if (battle.battleType === BattleType.TRAINER && !this.loaded) {
+      console.log(`[Encounter DEBUG] Wave ${battle.waveIndex}: TRAINER battle, chatTrainers.isActive=${chatTrainers.isActive()}, double=${battle.double}, enemyLevels=${battle.enemyLevels?.length}`);
+    }
 
     // Generate and Init Mystery Encounter
     if (battle.isBattleMysteryEncounter() && !battle.mysteryEncounter) {
@@ -96,7 +130,173 @@ export class EncounterPhase extends BattlePhase {
       globalScene.field.add(mysteryEncounter.introVisuals!);
     }
 
+    // --- PvP Mode: Set up trainer battle with opponent's team ---
+    let pvpCustomPartyUsed = false;
+    if (pvpBattle.isPvpActive() && !this.loaded && battle.waveIndex === 1) {
+      const config = pvpBattle.getConfig();
+      if (config && config.opponentTeam.length > 0) {
+        battle.battleType = BattleType.TRAINER;
+        battle.double = false;
+        battle.battleSeed = config.seed; // Shared seed for deterministic results
+
+        const trainer = new Trainer(TrainerType.ACE_TRAINER, TrainerVariant.DEFAULT, 0);
+        trainer.overrideName = config.opponentName;
+        trainer.overrideSpriteKey = config.opponentSprite;
+        battle.trainer = trainer;
+        globalScene.field.add(trainer);
+
+        const level = config.playerLevel || 50;
+        battle.enemyLevels = config.opponentTeam.map(() => level);
+        battle.enemyParty = [];
+
+        // Seed RNG deterministically per side so both clients create identical Pokemon
+        const opponentSide = config.side === "boss" ? "challenger" : "boss";
+        Phaser.Math.RND.sow([config.seed + "_" + opponentSide]);
+
+        for (let ci = 0; ci < config.opponentTeam.length; ci++) {
+          const cp = config.opponentTeam[ci];
+          const species = getPokemonSpecies(cp.speciesId);
+          const newPokemon = globalScene.addEnemyPokemon(species, level, TrainerSlot.TRAINER);
+          // Apply form if specified (Mega, Gigantamax, etc.)
+          if (cp.formIndex !== undefined && cp.formIndex > 0) {
+            newPokemon.formIndex = cp.formIndex;
+            newPokemon.generateName();
+          }
+          // Apply shiny variant
+          if (cp.shiny) {
+            newPokemon.shiny = true;
+            if (cp.variant !== undefined) {
+              newPokemon.variant = cp.variant;
+            }
+          }
+          battle.enemyParty[ci] = newPokemon;
+        }
+        pvpCustomPartyUsed = true;
+        console.log(`[PvP] Set up battle: ${config.opponentTeam.length} opponent Pokemon (seed: ${config.seed})`);
+      }
+    }
+
+    // --- Chat Feature: Wild → Trainer conversion ---
+    if (chatTrainers.isActive() && !this.loaded && !battle.isBattleMysteryEncounter()
+        && battle.battleType !== BattleType.TRAINER && chatTrainers.hasCustomTrainerInsert(battle.waveIndex)) {
+      const custom = chatTrainers.getCustomization(battle.waveIndex);
+      if (custom?.customParty && custom.customParty.length > 0) {
+        battle.battleType = BattleType.TRAINER;
+        battle.double = false; // Inserted trainers are always single battles
+
+        const trainer = new Trainer(TrainerType.ACE_TRAINER, TrainerVariant.DEFAULT, 0);
+        if (custom.trainerName) trainer.overrideName = custom.trainerName;
+        trainer.overrideSpriteKey = custom.spriteKey || 'youngster';
+        battle.trainer = trainer;
+        globalScene.field.add(trainer);
+
+        // Build custom party directly (skip main loop to avoid double-creation bugs)
+        battle.enemyLevels = [];
+        battle.enemyParty = [];
+        for (let ci = 0; ci < custom.customParty.length; ci++) {
+          const cp = custom.customParty[ci];
+          const species = getPokemonSpecies(cp.speciesId);
+          const level = battle.getLevelForWave();
+          const newPokemon = globalScene.addEnemyPokemon(species, level, TrainerSlot.TRAINER);
+          if (cp.shiny) {
+            newPokemon.shiny = true;
+          }
+          if (cp.nickname) {
+            newPokemon.nickname = btoa(unescape(encodeURIComponent(cp.nickname)));
+          }
+          battle.enemyParty.push(newPokemon);
+          if (ci < (battle.double ? 2 : 1)) {
+            newPokemon.setX(-66 + newPokemon.getFieldPositionOffset()[0]);
+          }
+          loadEnemyAssets.push(newPokemon.loadAssets());
+        }
+        console.log(`[ChatTrainers] Wild→Trainer conversion at wave ${battle.waveIndex} (${custom.customParty.length} Pokemon)`);
+      }
+    }
+
+    // --- Chat Feature: Trainer-Only gimmick (convert remaining wild encounters) ---
+    if (chatTrainers.isActive() && !this.loaded && !battle.isBattleMysteryEncounter()
+        && battle.battleType !== BattleType.TRAINER && chatTrainers.isTrainerOnly()) {
+      battle.battleType = BattleType.TRAINER;
+
+      const trainer = new Trainer(TrainerType.ACE_TRAINER, TrainerVariant.DEFAULT, 0);
+      battle.trainer = trainer;
+      globalScene.field.add(trainer);
+
+      // Use current enemy levels count for party size
+      battle.enemyLevels = (battle.enemyLevels || [battle.getLevelForWave()]);
+      console.log(`[ChatTrainers] Trainer-Only gimmick: converted wild to trainer at wave ${battle.waveIndex}`);
+    }
+
     let totalBst = 0;
+
+    // --- Chat Feature: Pre-create custom party for claimed trainers ---
+    // This ensures custom pokemon go through the normal fieldSetup(true) path,
+    // preventing HP display glitches caused by post-loop destroy/recreate.
+    let chatCustomPartyUsed = false;
+    if (chatTrainers.isActive() && !this.loaded && !battle.isBattleMysteryEncounter()
+        && battle.battleType === BattleType.TRAINER && battle.trainer) {
+      const customCheck = chatTrainers.getCustomization(battle.waveIndex);
+      if (customCheck && !customCheck.isCustomInserted && customCheck.customParty && customCheck.customParty.length > 0) {
+        // Apply name/sprite overrides early
+        if (customCheck.trainerName) {
+          battle.trainer.overrideName = customCheck.trainerName;
+        }
+        battle.trainer.overrideSpriteKey = customCheck.spriteKey || 'youngster';
+
+        // Force single battle if custom party has only 1 pokemon
+        if (customCheck.customParty.length === 1 && battle.double) {
+          battle.double = false;
+        }
+
+        // Override enemy levels to match custom party size
+        battle.enemyLevels = customCheck.customParty.map(() => battle.getLevelForWave());
+
+        // Pre-create custom pokemon
+        for (let ci = 0; ci < customCheck.customParty.length; ci++) {
+          const cp = customCheck.customParty[ci];
+          const species = getPokemonSpecies(cp.speciesId);
+          const level = battle.getLevelForWave();
+          const newPokemon = globalScene.addEnemyPokemon(species, level, TrainerSlot.TRAINER);
+          if (cp.shiny) {
+            newPokemon.shiny = true;
+          }
+          if (cp.nickname) {
+            newPokemon.nickname = btoa(unescape(encodeURIComponent(cp.nickname)));
+          }
+          battle.enemyParty[ci] = newPokemon;
+        }
+        chatCustomPartyUsed = true;
+        console.log(`[ChatTrainers] Pre-created custom party at wave ${battle.waveIndex} (${customCheck.customParty.length} Pokemon)`);
+
+        // DEBUG: Log fieldUI state after pre-creation
+        const fieldUIAll = globalScene.fieldUI.getAll();
+        console.log(`[ChatTrainers DEBUG] fieldUI has ${fieldUIAll.length} children after pre-creation:`);
+        fieldUIAll.slice(0, 8).forEach((child, i) => {
+          const bi = child as any;
+          const isPlayerBI = bi.player === true;
+          const isEnemyBI = bi.player === false;
+          if (isPlayerBI || isEnemyBI) {
+            console.log(`  [${i}] ${isPlayerBI ? 'PlayerBI' : 'EnemyBI'}: visible=${child.visible}, x=${Math.round(child.x)}, y=${Math.round(child.y)}`);
+          } else {
+            console.log(`  [${i}] Other: type=${child.type}, visible=${child.visible}`);
+          }
+        });
+
+        // DEBUG: Log player BattleInfo state
+        const playerParty = globalScene.getPlayerParty();
+        for (let pi = 0; pi < Math.min(playerParty.length, 2); pi++) {
+          const pp = playerParty[pi];
+          if (pp?.battleInfo) {
+            const pbi = pp.battleInfo as any;
+            console.log(`[ChatTrainers DEBUG] Player[${pi}] battleInfo: visible=${pbi.visible}, x=${Math.round(pbi.x)}, y=${Math.round(pbi.y)}, hpBar.scaleX=${pp.battleInfo.hpBar?.scaleX?.toFixed(3)}`);
+            if (pbi.expMaskRect) {
+              console.log(`  expMaskRect: x=${Math.round(pbi.expMaskRect.x)}, y=${Math.round(pbi.expMaskRect.y)}, visible=${pbi.expMaskRect.visible}`);
+            }
+          }
+        }
+      }
+    }
 
     battle.enemyLevels?.every((level, e) => {
       if (battle.isBattleMysteryEncounter()) {
@@ -104,7 +304,9 @@ export class EncounterPhase extends BattlePhase {
         return false;
       }
       if (!this.loaded) {
-        if (battle.battleType === BattleType.TRAINER) {
+        if (chatCustomPartyUsed || pvpCustomPartyUsed) {
+          // Pokemon already created above, skip genPartyMember
+        } else if (battle.battleType === BattleType.TRAINER) {
           battle.enemyParty[e] = battle.trainer?.genPartyMember(e)!; // TODO:: is the bang correct here?
         } else {
           let enemySpecies = globalScene.randomSpecies(battle.waveIndex, level, true);
@@ -198,6 +400,118 @@ export class EncounterPhase extends BattlePhase {
       console.log("Moveset:", moveset);
       return true;
     });
+
+    // DEBUG: Log fieldUI state after main loop (only for custom trainer battles)
+    if (chatCustomPartyUsed) {
+      const fieldUIAll2 = globalScene.fieldUI.getAll();
+      console.log(`[ChatTrainers DEBUG] fieldUI after main loop: ${fieldUIAll2.length} children`);
+      fieldUIAll2.slice(0, 8).forEach((child, i) => {
+        const bi = child as any;
+        const isPlayerBI = bi.player === true;
+        const isEnemyBI = bi.player === false;
+        if (isPlayerBI || isEnemyBI) {
+          console.log(`  [${i}] ${isPlayerBI ? 'PlayerBI' : 'EnemyBI'}: visible=${child.visible}, x=${Math.round(child.x)}, y=${Math.round(child.y)}`);
+        }
+      });
+    }
+
+    // --- Chat Trainer Feature Hooks ---
+    if (chatTrainers.isActive() && !this.loaded && !battle.isBattleMysteryEncounter()) {
+      // Only P1 / solo reports to server (P2 just receives customizations)
+      const isReporter = !raceManager.isRaceMode() || raceManager.getPlayerNumber() === 1;
+
+      // Report wave progress + streamer party
+      if (isReporter) {
+        chatTrainers.reportWaveUpdate(battle.waveIndex, globalScene.arena?.biomeId?.toString() || "");
+
+        // Report streamer's current party
+        const playerParty = globalScene.getPlayerParty().map(p => ({
+          speciesId: p.species.speciesId,
+          iconId: p.getIconId(),
+          name: p.getNameToRender(),
+          level: p.level,
+          shiny: p.shiny,
+          shinyVariant: p.shiny ? (p.variant ?? 0) + 1 : 0,
+          hp: p.hp,
+          maxHp: p.getMaxHp(),
+        }));
+        chatTrainers.reportStreamerParty(playerParty);
+      }
+
+      if (battle.battleType === BattleType.TRAINER && battle.trainer) {
+        // Report trainer to server (P1 only)
+        if (isReporter) {
+          const partyData = battle.enemyParty.map(p => ({
+            speciesId: p.species.speciesId,
+            name: p.species.getName(),
+            level: p.level,
+            cost: 3, // Default cost, server will look up actual cost
+          }));
+          chatTrainers.reportTrainer(battle.waveIndex, {
+            trainerType: battle.trainer.config?.trainerType,
+            trainerClass: battle.trainer.config?.getTitle(TrainerSlot.NONE, battle.trainer.variant) || "",
+            spriteKey: battle.trainer.getKey(),
+            variant: battle.trainer.variant,
+            isFixed: battle.trainer.config?.hasStaticParty || false,
+            isBoss: globalScene.gameMode.isBoss(battle.waveIndex),
+            biome: globalScene.arena?.biomeId?.toString() || "",
+            originalParty: partyData,
+          });
+        }
+
+        // Apply customizations from chat (skip for inserted trainers and pre-created custom parties)
+        const custom = chatTrainers.getCustomization(battle.waveIndex);
+        if (custom && !custom.isCustomInserted && !chatCustomPartyUsed) {
+          // Name override (only for non-custom-party claims, e.g. name-only or sprite-only)
+          if (custom.trainerName) {
+            battle.trainer.overrideName = custom.trainerName;
+          }
+          // Sprite override (default to youngster if no sprite selected)
+          battle.trainer.overrideSpriteKey = custom.spriteKey || 'youngster';
+          // Pokemon nicknames (without party replacement)
+          if (custom.pokemonNicknames) {
+            for (const [slotStr, nickname] of Object.entries(custom.pokemonNicknames)) {
+              const slot = parseInt(slotStr);
+              if (slot >= 0 && slot < battle.enemyParty.length && nickname) {
+                battle.enemyParty[slot].nickname = btoa(unescape(encodeURIComponent(nickname as string)));
+              }
+            }
+          }
+        }
+        // Apply nicknames for pre-created custom party
+        if (chatCustomPartyUsed) {
+          const customNick = chatTrainers.getCustomization(battle.waveIndex);
+          if (customNick?.pokemonNicknames) {
+            for (const [slotStr, nickname] of Object.entries(customNick.pokemonNicknames)) {
+              const slot = parseInt(slotStr);
+              if (slot >= 0 && slot < battle.enemyParty.length && nickname) {
+                battle.enemyParty[slot].nickname = btoa(unescape(encodeURIComponent(nickname as string)));
+              }
+            }
+          }
+        }
+      }
+
+      // Gimmick: force double battles (only if enough enemies)
+      if (chatTrainers.isDoubleForced() && !battle.double && battle.enemyParty.length >= 2) {
+        battle.double = true;
+      }
+
+      // Gimmick: shiny wave — make all enemies shiny
+      if (chatTrainers.isShinyWave()) {
+        for (const enemy of battle.enemyParty) {
+          enemy.shiny = true;
+        }
+      }
+
+      // Gimmick: level boost — +10 levels to all enemies
+      if (chatTrainers.isLevelBoost()) {
+        for (const enemy of battle.enemyParty) {
+          enemy.level = Math.min(enemy.level + 10, 100);
+          enemy.calculateStats();
+        }
+      }
+    }
 
     if (globalScene.getPlayerParty().filter(p => p.isShiny()).length === PLAYER_PARTY_MAX_SIZE) {
       globalScene.validateAchv(achvs.SHINY_PARTY);
@@ -430,8 +744,12 @@ export class EncounterPhase extends BattlePhase {
       const doSummon = () => {
         globalScene.currentBattle.started = true;
         globalScene.playBgm(undefined);
-        globalScene.pbTray.showPbTray(globalScene.getPlayerParty());
-        globalScene.pbTrayEnemy.showPbTray(globalScene.getEnemyParty());
+        // Skip pokeball tray for custom trainer battles (overlaps with player BattleInfo at y=-72)
+        const isCustomTrainer = chatTrainers.isActive() && !!chatTrainers.getCustomization(globalScene.currentBattle.waveIndex);
+        if (!isCustomTrainer) {
+          globalScene.pbTray.showPbTray(globalScene.getPlayerParty());
+          globalScene.pbTrayEnemy.showPbTray(globalScene.getEnemyParty());
+        }
         const doTrainerSummon = () => {
           this.hideEnemyTrainer();
           const availablePartyMembers = globalScene.getEnemyParty().filter(p => !p.isFainted()).length;
@@ -568,6 +886,22 @@ export class EncounterPhase extends BattlePhase {
 
     if (!this.loaded) {
       const availablePartyMembers = globalScene.getPokemonAllowedInBattle();
+
+      // DEBUG: Log player BattleInfo state before summon setup (chat trainer battles only)
+      if (chatTrainers.isActive() && globalScene.currentBattle.battleType === BattleType.TRAINER) {
+        const fieldUIEnd = globalScene.fieldUI.getAll();
+        console.log(`[ChatTrainers DEBUG] end(): fieldUI has ${fieldUIEnd.length} children, battle.double=${globalScene.currentBattle.double}`);
+        fieldUIEnd.slice(0, 8).forEach((child, i) => {
+          const bi = child as any;
+          if (bi.player === true || bi.player === false) {
+            console.log(`  [${i}] ${bi.player ? 'PlayerBI' : 'EnemyBI'}: visible=${child.visible}, x=${Math.round(child.x)}, y=${Math.round(child.y)}`);
+          }
+        });
+        for (let pi = 0; pi < Math.min(availablePartyMembers.length, 2); pi++) {
+          const pp = availablePartyMembers[pi];
+          console.log(`  Player[${pi}]: onField=${pp.isOnField()}, hp=${pp.hp}/${pp.getMaxHp()}, battleInfo.visible=${pp.battleInfo?.visible}, battleInfo.x=${Math.round(pp.battleInfo?.x ?? 0)}`);
+        }
+      }
 
       if (!availablePartyMembers[0].isOnField()) {
         globalScene.phaseManager.pushNew("SummonPhase", 0);

@@ -1,4 +1,5 @@
 import { globalScene } from "#app/global-scene";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { AbilityId } from "#enums/ability-id";
 import { BattlerIndex } from "#enums/battler-index";
 import { BattlerTagType } from "#enums/battler-tag-type";
@@ -7,9 +8,10 @@ import type { EnemyPokemon } from "#field/pokemon";
 import { FieldPhase } from "#phases/field-phase";
 
 /**
- * Phase for determining an enemy AI's action for the next turn.
- * During this phase, the enemy decides whether to switch (if it has a trainer)
- * or to use a move from its moveset.
+ * Phase for determining an enemy's action for the next turn.
+ *
+ * In normal mode: Enemy AI picks the move.
+ * In PvP mode: Waits for the opponent's move selection via network.
  *
  * For more information on how the Enemy AI works, see docs/enemy-ai.md
  * @see {@linkcode Pokemon.getMatchupScore}
@@ -46,14 +48,67 @@ export class EnemyCommandPhase extends FieldPhase {
       this.skipTurn = true;
     }
 
+    // --- PvP Mode: Wait for opponent's move from network ---
+    if (pvpBattle.isPvpActive()) {
+      this.handlePvpMove(enemyPokemon);
+      return;
+    }
+
+    // --- Normal AI Mode ---
+    this.handleAiMove(enemyPokemon, battle, trainer);
+  }
+
+  /**
+   * PvP mode: Wait for the opponent's move selection from the server.
+   */
+  private handlePvpMove(enemyPokemon: EnemyPokemon): void {
+    if (this.skipTurn) {
+      globalScene.currentBattle.turnCommands[this.fieldIndex + BattlerIndex.ENEMY] = {
+        command: Command.FIGHT,
+        move: { move: 0, targets: [], useMode: 0 },
+        skip: true,
+      };
+      this.end();
+      return;
+    }
+
+    pvpBattle.waitForOpponentMove().then((opponentMove) => {
+      const battle = globalScene.currentBattle;
+
+      if (opponentMove.command === Command.POKEMON) {
+        // Opponent is switching pokemon
+        battle.turnCommands[this.fieldIndex + BattlerIndex.ENEMY] = {
+          command: Command.POKEMON,
+          cursor: opponentMove.cursor,
+          args: opponentMove.args || [false],
+          skip: this.skipTurn,
+        };
+      } else {
+        // Opponent is using a move (Command.FIGHT)
+        // Flip targets between perspectives: opponent's PLAYER(0) ↔ our ENEMY(2), etc.
+        const flippedTargets = opponentMove.move?.targets.map(t => (t + 2) % 4) ?? [];
+        battle.turnCommands[this.fieldIndex + BattlerIndex.ENEMY] = {
+          command: Command.FIGHT,
+          move: opponentMove.move ? {
+            move: opponentMove.move.move,
+            targets: flippedTargets,
+            useMode: opponentMove.move.useMode,
+          } : enemyPokemon.getNextMove(), // fallback to AI if no move data
+          skip: this.skipTurn,
+        };
+      }
+
+      this.end();
+    });
+  }
+
+  /**
+   * Normal AI mode: Enemy AI decides whether to switch or attack.
+   */
+  private handleAiMove(enemyPokemon: EnemyPokemon, battle: any, trainer: any): void {
     /**
      * If the enemy has a trainer, decide whether or not the enemy should switch
      * to another member in its party.
-     *
-     * This block compares the active enemy Pokemon's {@linkcode Pokemon.getMatchupScore | matchup score}
-     * against the active player Pokemon with the enemy party's other non-fainted Pokemon. If a party
-     * member's matchup score is 3x the active enemy's score (or 2x for "boss" trainers),
-     * the enemy will switch to that Pokemon.
      */
     if (trainer && enemyPokemon.getMoveQueue().length === 0) {
       const opponents = enemyPokemon.getOpponents();
@@ -62,8 +117,8 @@ export class EnemyCommandPhase extends FieldPhase {
         const partyMemberScores = trainer.getPartyMemberMatchupScores(enemyPokemon.trainerSlot, true);
 
         if (partyMemberScores.length > 0) {
-          const matchupScores = opponents.map(opp => enemyPokemon.getMatchupScore(opp));
-          const matchupScore = matchupScores.reduce((total, score) => (total += score), 0) / matchupScores.length;
+          const matchupScores = opponents.map((opp: any) => enemyPokemon.getMatchupScore(opp));
+          const matchupScore = matchupScores.reduce((total: number, score: number) => (total += score), 0) / matchupScores.length;
 
           const sortedPartyMemberScores = trainer.getSortedPartyMemberMatchupScores(partyMemberScores);
 

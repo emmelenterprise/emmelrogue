@@ -1,0 +1,517 @@
+/* --- OBS Overlay — Gym Leader Mode --- */
+/* Optimized for OBS: transparent BG, contain, will-change, backface-visibility */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --accent: #a855f7;
+  --accent-glow: rgba(168, 85, 247, 0.6);
+  --accent-dark: #7c3aed;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #eab308;
+  --gold: #fbbf24;
+  --bg-dark: rgba(15, 15, 20, 0.92);
+  --bg-darker: rgba(10, 10, 15, 0.95);
+  --border: rgba(168, 85, 247, 0.3);
+  --text: #f0f0ff;
+  --text-muted: #a0a0c0;
+  --font-pixel: 'Press Start 2P', monospace;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+}
+
+.hidden { display: none !important; }
+
+/* ===== ARENA ENTRANCE SEQUENCE ===== */
+.arena-sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #0a0a12;
+  contain: layout style paint;
+  will-change: opacity;
+}
+
+.arena-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #0a0a1a 0%, #151528 40%, #1a1a30 100%);
+  overflow: hidden;
+}
+
+/* Gate animation */
+.arena-gate {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px;
+  height: 300px;
+  display: flex;
+  overflow: hidden;
+}
+.gate-left, .gate-right {
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(135deg, #2a2a4a, #1a1a30);
+  border: 3px solid var(--accent);
+  transition: transform 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+.gate-left {
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+  transform-origin: left center;
+}
+.gate-right {
+  border-left: none;
+  border-radius: 0 12px 12px 0;
+  transform-origin: right center;
+}
+.arena-gate.open .gate-left { transform: translateX(-105%); }
+.arena-gate.open .gate-right { transform: translateX(105%); }
+
+/* Gate decoration */
+.gate-left::after, .gate-right::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 30px;
+  height: 60px;
+  background: var(--accent);
+  opacity: 0.3;
+  border-radius: 4px;
+  transform: translateY(-50%);
+}
+.gate-left::after { right: 15px; }
+.gate-right::after { left: 15px; }
+
+.arena-floor {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, #1a1a30 0%, #252540 30%, #2a2a4a 100%);
+  border-top: 2px solid rgba(168, 85, 247, 0.2);
+}
+/* Battle arena pattern on floor */
+.arena-floor::before {
+  content: '';
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 200px;
+  border: 3px solid rgba(168, 85, 247, 0.15);
+  border-radius: 50%;
+}
+
+.arena-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+/* Challenger entrance */
+.challenger-entrance {
+  position: absolute;
+  bottom: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.challenger-entrance.walk-in {
+  animation: walkIn 1.5s ease-out forwards;
+}
+@keyframes walkIn {
+  0% { opacity: 0; transform: translateX(-50%) translateY(100px); }
+  30% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.trainer-sprite {
+  width: 128px;
+  height: 160px;
+  image-rendering: pixelated;
+  overflow: hidden;
+}
+.trainer-sprite img {
+  image-rendering: pixelated;
+}
+.trainer-name {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  color: var(--text);
+  text-shadow: 0 0 10px var(--accent-glow);
+  text-align: center;
+}
+
+/* Teams reveal */
+.teams-reveal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  opacity: 0;
+  will-change: opacity;
+}
+.teams-reveal.show {
+  animation: fadeScale 0.6s ease-out forwards;
+}
+@keyframes fadeScale {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.team-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.team-label {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.team-icons {
+  display: flex;
+  gap: 6px;
+}
+.team-icons img {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+
+.vs-badge {
+  font-family: var(--font-pixel);
+  font-size: 36px;
+  color: var(--red);
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.6), 0 0 40px rgba(239, 68, 68, 0.3);
+  animation: vsPulse 1s ease-in-out infinite alternate;
+}
+@keyframes vsPulse {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.15); }
+}
+
+/* Trainer line */
+.trainer-line-box {
+  position: absolute;
+  bottom: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-dark);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 16px 32px;
+  max-width: 700px;
+  opacity: 0;
+  will-change: opacity;
+}
+.trainer-line-box.show {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+.line-text {
+  font-size: 18px;
+  color: var(--text);
+  text-align: center;
+  font-style: italic;
+}
+
+/* FIGHT text */
+.fight-text {
+  font-family: var(--font-pixel);
+  font-size: 72px;
+  color: var(--gold);
+  text-shadow: 0 0 30px rgba(251, 191, 36, 0.8), 0 0 60px rgba(251, 191, 36, 0.4), 4px 4px 0 #b45309;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.fight-text.show {
+  animation: fightSlam 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+@keyframes fightSlam {
+  0% { opacity: 0; transform: scale(3); }
+  60% { opacity: 1; transform: scale(0.9); }
+  80% { transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ===== PERSISTENT OVERLAY ===== */
+#overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* --- Current Battle Bar --- */
+.battle-bar {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-dark);
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  padding: 12px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 400px;
+  box-shadow: 0 0 30px var(--accent-glow);
+  contain: layout style;
+  backface-visibility: hidden;
+  will-change: opacity;
+  animation: slideDown 0.5s ease-out;
+}
+@keyframes slideDown {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.battle-label {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 3px;
+}
+.battle-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.fighter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fighter-sprite {
+  width: 48px;
+  height: 60px;
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+.fighter-sprite img { image-rendering: pixelated; }
+.fighter-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+.vs {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--red);
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+/* --- Queue Bar --- */
+.queue-bar {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--bg-dark);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  min-width: 200px;
+  max-height: 500px;
+  contain: layout style;
+  backface-visibility: hidden;
+}
+.queue-label {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.queue-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.q-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(30, 30, 46, 0.6);
+  border-radius: 8px;
+  border: 1px solid rgba(168, 85, 247, 0.15);
+}
+.q-item:first-child {
+  border-color: var(--accent);
+  background: rgba(168, 85, 247, 0.1);
+}
+.q-pos {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--text-muted);
+  min-width: 20px;
+}
+.q-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+.q-name {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+.q-team {
+  display: flex;
+  gap: 2px;
+}
+.q-team img {
+  width: 20px;
+  height: 20px;
+  image-rendering: pixelated;
+}
+.q-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 10px 0;
+  font-style: italic;
+}
+
+/* --- Badge Alert --- */
+.badge-alert {
+  position: absolute;
+  top: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(168, 85, 247, 0.15));
+  border: 2px solid var(--gold);
+  border-radius: 16px;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.3);
+  will-change: transform, opacity;
+}
+.badge-alert.show {
+  animation: badgeIn 0.6s ease-out forwards;
+}
+.badge-alert.hide {
+  animation: badgeOut 0.4s ease-in forwards;
+}
+@keyframes badgeIn {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
+  50% { transform: translateX(-50%) scale(1.1); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+@keyframes badgeOut {
+  0% { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) scale(0.8) translateY(-20px); }
+}
+
+.badge-icon {
+  font-size: 36px;
+  animation: badgeSpin 2s ease-in-out infinite;
+}
+@keyframes badgeSpin {
+  0%, 100% { transform: rotateY(0deg); }
+  50% { transform: rotateY(180deg); }
+}
+.badge-text {
+  font-size: 18px;
+  color: var(--text);
+}
+.badge-text strong {
+  color: var(--gold);
+  font-family: var(--font-pixel);
+}
+
+/* --- Leaderboard --- */
+.leaderboard-box {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: var(--bg-dark);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 180px;
+  contain: layout style;
+  backface-visibility: hidden;
+}
+.lb-label {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--gold);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.lb-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.lb-rank {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--gold);
+  min-width: 20px;
+}
+.lb-rank.r1 { color: #fbbf24; }
+.lb-rank.r2 { color: #94a3b8; }
+.lb-rank.r3 { color: #d97706; }
+.lb-name { flex: 1; color: var(--text); }
+.lb-count {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--accent);
+}
+.lb-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+}

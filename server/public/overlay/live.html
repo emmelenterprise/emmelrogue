@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>EmmelRogue Live Overlay</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    html, body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
+  </style>
+</head>
+<body>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const twitchId = params.get('twitchId') || '647322993';
+
+    const socket = io({ transports: ['websocket', 'polling'] });
+    let redirected = false;
+
+    socket.on('connect', () => {
+      socket.emit('REGISTER_LIVE_OVERLAY', { twitchId });
+    });
+
+    socket.on('LIVE_OVERLAY_UPDATE', ({ overlayUrl, code }) => {
+      if (!overlayUrl || redirected) return;
+      redirected = true;
+      // Direct redirect — no iframe nesting, same performance as manual URL
+      window.location.href = overlayUrl;
+    });
+  </script>
+</body>
+</html>

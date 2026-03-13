@@ -1,4 +1,6 @@
 import { TYPE_BOOST_ITEM_BOOST_PERCENT } from "#app/constants";
+import { chatTrainers } from "#app/emmelrogue/chat-trainers";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
@@ -2906,6 +2908,33 @@ export class ModifierTypeOption {
  * @returns A number between 0 and 14 based on the party's total luck value, or a random number between 0 and 14 if the player is in Daily Run mode.
  */
 export function getPartyLuckValue(party: readonly Pokemon[]): number {
+  // Chat gimmick: luck_boost overrides to max luck
+  if (raceManager.isRaceMode() && chatTrainers.isLuckMax()) {
+    return 14;
+  }
+  // Race mode: use fixed luck level if set by lobby, otherwise seed-based
+  if (raceManager.isRaceMode()) {
+    const luckLevel = raceManager.getLuckLevel();
+    if (luckLevel >= 0) {
+      return Math.min(14, luckLevel);
+    }
+    // Default: seed-based luck (like Daily) so both players get identical items
+    const DailyLuck = new NumberHolder(0);
+    globalScene.executeWithSeedOffset(
+      () => {
+        const eventLuck = getDailyEventSeedLuck();
+        if (eventLuck != null) {
+          DailyLuck.value = eventLuck;
+          return;
+        }
+
+        DailyLuck.value = randSeedInt(15);
+      },
+      0,
+      globalScene.seed,
+    );
+    return DailyLuck.value;
+  }
   if (globalScene.gameMode.isDaily) {
     const DailyLuck = new NumberHolder(0);
     globalScene.executeWithSeedOffset(
@@ -2916,7 +2945,7 @@ export function getPartyLuckValue(party: readonly Pokemon[]): number {
           return;
         }
 
-        DailyLuck.value = randSeedInt(15); // Random number between 0 and 14
+        DailyLuck.value = randSeedInt(15);
       },
       0,
       globalScene.seed,

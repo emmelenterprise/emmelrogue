@@ -1,3 +1,5 @@
+import { raceManager } from "#app/emmelrogue/race-manager";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { modifierTypes } from "#data/data-lists";
@@ -41,6 +43,20 @@ export class VictoryPhase extends PokemonPhase {
         .getEnemyParty()
         .find(p => (globalScene.currentBattle.battleType === BattleType.WILD ? p.isOnField() : !p?.isFainted(true)))
     ) {
+      // PvP: battle won — report result and redirect to lobby
+      if (pvpBattle.isPvpActive()) {
+        pvpBattle.reportResult("win");
+        globalScene.phaseManager.clearPhaseQueue();
+        globalScene.ui.showText("PvP-Kampf gewonnen!", null, () => {
+          globalScene.time.delayedCall(2000, () => {
+            pvpBattle.endBattle();
+            window.location.href = "/lobby/";
+          });
+        });
+        this.end();
+        return;
+      }
+
       globalScene.phaseManager.pushNew("BattleEndPhase", true);
       if (globalScene.currentBattle.battleType === BattleType.TRAINER) {
         globalScene.phaseManager.pushNew("TrainerVictoryPhase");
@@ -48,6 +64,18 @@ export class VictoryPhase extends PokemonPhase {
 
       const gameMode = globalScene.gameMode;
       const currentWaveIndex = globalScene.currentBattle.waveIndex;
+
+      // Race mode: win triggers immediately after beating the target wave (before item selection)
+      if (
+        raceManager.isRaceMode()
+        && raceManager.getWinCondition() === "wave"
+        && currentWaveIndex >= raceManager.getWinWave()
+      ) {
+        raceManager.markEnded();
+        globalScene.phaseManager.pushNew("GameOverPhase", true);
+        this.end();
+        return;
+      }
 
       if (gameMode.isEndless || !gameMode.isWaveFinal(currentWaveIndex)) {
         globalScene.phaseManager.pushNew("EggLapsePhase");

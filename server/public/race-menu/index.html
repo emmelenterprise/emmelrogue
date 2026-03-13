@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmmelRogue Race-Menu</title>
+  <link rel="stylesheet" href="race-menu.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <img src="emmelrogue-logo.png" alt="EmmelRogue" class="logo">
+      <div class="race-code-bar">
+        <span class="label">Code:</span>
+        <span id="race-code" class="code">----</span>
+        <button id="btn-copy" class="btn-icon" title="Code kopieren">&#128203;</button>
+      </div>
+    </div>
+
+    <!-- Players -->
+    <div class="players-bar">
+      <div class="player-info">
+        <img id="p1-avatar" class="player-avatar" src="" alt="">
+        <span id="p1-name" class="player-name">Spieler 1</span>
+        <span class="host-badge" id="p1-host">HOST</span>
+      </div>
+      <div class="vs">VS</div>
+      <div class="player-info">
+        <img id="p2-avatar" class="player-avatar" src="" alt="">
+        <span id="p2-name" class="player-name">Spieler 2</span>
+        <span class="host-badge hidden" id="p2-host">HOST</span>
+      </div>
+    </div>
+
+    <!-- Game Rules Section -->
+    <div class="card" id="rules-section">
+      <h2>Spielregeln</h2>
+      <div class="rules-grid">
+        <div class="field">
+          <label>Starter-Modus</label>
+          <select id="starter-mode-select" class="select" disabled>
+            <option value="random">Random (gleich fuer beide)</option>
+            <option value="free">Freie Wahl (im Spiel)</option>
+          </select>
+        </div>
+        <div class="field" id="starter-count-field">
+          <label>Starter-Anzahl</label>
+          <select id="starter-count-select" class="select" disabled>
+            <option value="1">1 Pokemon</option>
+            <option value="2">2 Pokemon</option>
+            <option value="3" selected>3 Pokemon</option>
+            <option value="4">4 Pokemon</option>
+            <option value="5">5 Pokemon</option>
+            <option value="6">6 Pokemon</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Spielmodus</label>
+          <select id="game-mode-select" class="select" disabled>
+            <option value="classic">Classic</option>
+            <option value="endless">Endlos</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Siegbedingung</label>
+          <select id="win-condition-select" class="select" disabled>
+            <option value="wave">Erste Welle (eigene Zahl)</option>
+            <option value="wave100">Erste Welle 100</option>
+            <option value="wave200">Erste Welle 200 (Komplettes Spiel)</option>
+            <option value="firstko">Erster K.O.</option>
+            <option value="timed">Zeit (Hoechste Welle)</option>
+          </select>
+        </div>
+        <div class="field" id="wave-field">
+          <label>Ziel-Welle</label>
+          <input type="number" id="win-wave-input" class="input-number" value="20" min="1" max="200" disabled>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 16px; font-size: 14px; color: #a78bfa;">Zusatzregeln</h3>
+      <div class="rules-grid" style="margin-top: 8px;">
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="nuzlocke-death" disabled>
+            <span>Nuzlocke: Pokemon stirbt bei K.O.</span>
+          </label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="nuzlocke-catch" disabled>
+            <span>Nuzlocke: Nur 1 Fang pro Biom</span>
+          </label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label" id="respawn-label">
+            <input type="checkbox" id="respawn-wipe" disabled>
+            <span>Respawn bei Total-Wipe (Neustart Welle 1)</span>
+          </label>
+        </div>
+        <div class="field">
+          <label>Shiny-Modus</label>
+          <select id="shiny-mode-select" class="select" disabled>
+            <option value="off">Aus (Normal)</option>
+            <option value="boosted">Erhoeht (3x Chance)</option>
+            <option value="guaranteed">Garantiert (Alles Shiny)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Glueck-Stufe</label>
+          <select id="luck-level-select" class="select" disabled>
+            <option value="-1">Standard (Seed-basiert)</option>
+            <option value="0">0 — Kein Glueck</option>
+            <option value="3">3 — Wenig Glueck</option>
+            <option value="7">7 — Normal</option>
+            <option value="10">10 — Viel Glueck</option>
+            <option value="14">14 — Max Glueck</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera Section -->
+    <div class="card" id="camera-section">
+      <h2>Kamera</h2>
+      <div class="camera-controls">
+        <label class="checkbox-label">
+          <input type="checkbox" id="camera-enabled" checked>
+          <span>Kamera aktivieren</span>
+        </label>
+        <div class="field" id="camera-device-field">
+          <label>Geraet</label>
+          <select id="camera-device" class="select">
+            <option value="">Standard</option>
+          </select>
+        </div>
+      </div>
+      <div id="camera-preview-wrapper" class="camera-preview-wrapper">
+        <video id="camera-preview" autoplay muted playsinline></video>
+      </div>
+    </div>
+
+    <!-- Game Settings Section (per player, saved to localStorage) -->
+    <div class="card" id="settings-section">
+      <div class="card-header-toggle" id="settings-toggle">
+        <h2>Spieleinstellungen</h2>
+        <span class="toggle-arrow" id="settings-arrow">&#9660;</span>
+      </div>
+      <div id="settings-content" class="collapsible hidden">
+        <p class="settings-hint">Werden lokal gespeichert — jeder Spieler kann eigene waehlen.</p>
+
+        <h3 class="settings-group-title">Geschwindigkeit</h3>
+        <div class="rules-grid">
+          <div class="field">
+            <label>Spielgeschwindigkeit</label>
+            <select id="set-game-speed" class="select">
+              <option value="0">1x</option>
+              <option value="1">1.25x</option>
+              <option value="2">1.5x</option>
+              <option value="3">2x</option>
+              <option value="4">2.5x</option>
+              <option value="5">3x</option>
+              <option value="6">4x</option>
+              <option value="7" selected>5x</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>HP-Balken</label>
+            <select id="set-hp-bar-speed" class="select">
+              <option value="0">Normal</option>
+              <option value="1">Schnell</option>
+              <option value="2" selected>Schneller</option>
+              <option value="3">Ueberspringen</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>EP-Anzeige</label>
+            <select id="set-exp-gains-speed" class="select">
+              <option value="0">Normal</option>
+              <option value="1">Schnell</option>
+              <option value="2">Schneller</option>
+              <option value="3" selected>Ueberspringen</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>EP-Party-Anzeige</label>
+            <select id="set-exp-party-display" class="select">
+              <option value="0">Normal</option>
+              <option value="1">Level Up</option>
+              <option value="2" selected>Ueberspringen</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 class="settings-group-title">Kampf</h3>
+        <div class="rules-grid">
+          <div class="field">
+            <label>Kampfstil</label>
+            <select id="set-battle-style" class="select">
+              <option value="0">Wechsel</option>
+              <option value="1">Kampf (Set)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Schadenszahlen</label>
+            <select id="set-damage-numbers" class="select">
+              <option value="0">Aus</option>
+              <option value="1">Einfach</option>
+              <option value="2">Fancy</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Attacken-Animationen</label>
+            <select id="set-move-animations" class="select">
+              <option value="0">Aus</option>
+              <option value="1" selected>An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Typ-Hinweise</label>
+            <select id="set-type-hints" class="select">
+              <option value="0">Aus</option>
+              <option value="1">An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Stats bei Level-Up</label>
+            <select id="set-show-level-up-stats" class="select">
+              <option value="0" selected>Aus</option>
+              <option value="1">An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Tutorials</label>
+            <select id="set-tutorials" class="select">
+              <option value="0" selected>Aus</option>
+              <option value="1">An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Dialoge ueberspringen</label>
+            <select id="set-skip-dialogues" class="select">
+              <option value="0">Aus</option>
+              <option value="1">An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Cursor-Erinnerung</label>
+            <select id="set-cursor-memory" class="select">
+              <option value="0">Aus</option>
+              <option value="1">An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Retries</label>
+            <select id="set-retries" class="select">
+              <option value="0">Aus</option>
+              <option value="1">An</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 class="settings-group-title">Anzeige</h3>
+        <div class="rules-grid">
+          <div class="field">
+            <label>Fenster-Stil</label>
+            <select id="set-window-type" class="select">
+              <option value="0">Typ 1</option>
+              <option value="1">Typ 2</option>
+              <option value="2">Typ 3</option>
+              <option value="3">Typ 4</option>
+              <option value="4">Typ 5</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Geldformat</label>
+            <select id="set-money-format" class="select">
+              <option value="0">Normal</option>
+              <option value="1">Abgekuerzt</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Moveset-Flyout</label>
+            <select id="set-moveset-flyout" class="select">
+              <option value="0">Aus</option>
+              <option value="1" selected>An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Arena-Flyout</label>
+            <select id="set-arena-flyout" class="select">
+              <option value="0">Aus</option>
+              <option value="1" selected>An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Move-Info</label>
+            <select id="set-move-info" class="select">
+              <option value="0">Aus</option>
+              <option value="1" selected>An</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Sprite-Set</label>
+            <select id="set-sprite-set" class="select">
+              <option value="0">Consistent</option>
+              <option value="1">Experimental</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Spieler-Geschlecht</label>
+            <select id="set-player-gender" class="select">
+              <option value="0">Junge</option>
+              <option value="1">Maedchen</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Shop-Cursor</label>
+            <select id="set-shop-cursor" class="select">
+              <option value="0">Belohnungen</option>
+              <option value="1">Shop</option>
+              <option value="2">Reroll</option>
+              <option value="3">Team pruefen</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Shop-Overlay Deckkraft</label>
+            <select id="set-shop-opacity" class="select">
+              <option value="0">10%</option>
+              <option value="1">20%</option>
+              <option value="2">30%</option>
+              <option value="3">40%</option>
+              <option value="4">50%</option>
+              <option value="5">60%</option>
+              <option value="6">70%</option>
+              <option value="7" selected>80%</option>
+              <option value="8">90%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>BGM-Titelbar</label>
+            <select id="set-show-bgm-bar" class="select">
+              <option value="0">Aus</option>
+              <option value="1" selected>An</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 class="settings-group-title">Audio</h3>
+        <div class="rules-grid">
+          <div class="field">
+            <label>Master-Lautstaerke</label>
+            <select id="set-master-volume" class="select">
+              <option value="0">Stumm</option>
+              <option value="1">10%</option>
+              <option value="2">20%</option>
+              <option value="3">30%</option>
+              <option value="4">40%</option>
+              <option value="5" selected>50%</option>
+              <option value="6">60%</option>
+              <option value="7">70%</option>
+              <option value="8">80%</option>
+              <option value="9">90%</option>
+              <option value="10">100%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Musik</label>
+            <select id="set-bgm-volume" class="select">
+              <option value="0">Stumm</option>
+              <option value="1">10%</option>
+              <option value="2">20%</option>
+              <option value="3">30%</option>
+              <option value="4">40%</option>
+              <option value="5">50%</option>
+              <option value="6">60%</option>
+              <option value="7">70%</option>
+              <option value="8">80%</option>
+              <option value="9">90%</option>
+              <option value="10" selected>100%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Soundeffekte</label>
+            <select id="set-se-volume" class="select">
+              <option value="0">Stumm</option>
+              <option value="1">10%</option>
+              <option value="2">20%</option>
+              <option value="3">30%</option>
+              <option value="4">40%</option>
+              <option value="5">50%</option>
+              <option value="6">60%</option>
+              <option value="7">70%</option>
+              <option value="8">80%</option>
+              <option value="9">90%</option>
+              <option value="10" selected>100%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>UI-Sounds</label>
+            <select id="set-ui-volume" class="select">
+              <option value="0">Stumm</option>
+              <option value="1">10%</option>
+              <option value="2">20%</option>
+              <option value="3">30%</option>
+              <option value="4">40%</option>
+              <option value="5">50%</option>
+              <option value="6">60%</option>
+              <option value="7">70%</option>
+              <option value="8">80%</option>
+              <option value="9">90%</option>
+              <option value="10" selected>100%</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Kampfmusik</label>
+            <select id="set-battle-music" class="select">
+              <option value="0">Gen V</option>
+              <option value="1" selected>Alle Generationen</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <button id="btn-export-settings" class="btn btn-icon" style="flex:1; padding: 0.5rem;" title="Settings als Text kopieren">Einstellungen kopieren</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Section (per player) -->
+    <div class="card" id="perf-section">
+      <h2>Performance</h2>
+      <div class="field">
+        <label>Stream-Qualitaet</label>
+        <select id="perf-quality" class="select">
+          <option value="high" selected>Hoch (20fps, fuer starke PCs)</option>
+          <option value="medium">Mittel (12fps, Standard)</option>
+          <option value="low">Niedrig (8fps, fuer schwache PCs)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Ready Section -->
+    <div class="ready-section">
+      <div class="ready-status">
+        <div class="ready-indicator" id="p1-ready">
+          <span class="ready-dot"></span>
+          <span id="p1-ready-text">Nicht bereit</span>
+        </div>
+        <div class="ready-indicator" id="p2-ready">
+          <span class="ready-dot"></span>
+          <span id="p2-ready-text">Nicht bereit</span>
+        </div>
+      </div>
+      <button id="btn-ready" class="btn btn-primary btn-large">BEREIT</button>
+      <button id="btn-leave" class="btn btn-danger">Verlassen</button>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-bar" class="hidden">
+      <span id="status-text"></span>
+    </div>
+
+    <!-- Connection indicator -->
+    <div id="connection" class="connection disconnected">
+      <span class="dot"></span>
+      <span id="connection-text">Verbinde...</span>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="race-menu.js"></script>
+</body>
+</html>

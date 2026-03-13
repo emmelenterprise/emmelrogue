@@ -71,7 +71,8 @@ export class TitleUiHandler extends OptionSelectUiHandler {
 
     const logo = globalScene.add
       .image(scaledWidth / 2, 8, this.getLogo()) // formatting
-      .setOrigin(0.5, 0);
+      .setOrigin(0.5, 0)
+      .setScale(0.1);
 
     if (timedEventManager.isEventActive()) {
       this.eventDisplay = new TimedEventDisplay(0, 0, timedEventManager.activeEvent());

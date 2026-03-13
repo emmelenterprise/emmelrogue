@@ -31,6 +31,11 @@ export class Trainer extends Phaser.GameObjects.Container {
   public partnerNameKey: string | undefined;
   public originalIndexes: { [key: number]: number } = {};
 
+  /** Chat feature: override the displayed trainer name */
+  public overrideName: string | null = null;
+  /** Chat feature: override the trainer sprite key */
+  public overrideSpriteKey: string | null = null;
+
   /**
    * Create a new Trainer.
    * @param trainerType - The {@linkcode TrainerType} for this trainer, used to determine
@@ -145,6 +150,9 @@ export class Trainer extends Phaser.GameObjects.Container {
   }
 
   getKey(forceFemale?: boolean): string {
+    if (this.overrideSpriteKey) {
+      return this.overrideSpriteKey;
+    }
     return this.config.getSpriteKey(this.variant === TrainerVariant.FEMALE || forceFemale, this.isDouble());
   }
 
@@ -155,6 +163,13 @@ export class Trainer extends Phaser.GameObjects.Container {
    * @returns - The formatted name of the trainer
    */
   getName(trainerSlot: TrainerSlot = TrainerSlot.NONE, includeTitle = false): string {
+    // Chat feature: if overrideName is set, use class + custom name
+    if (this.overrideName) {
+      const baseTitle = this.config.getTitle(trainerSlot, this.variant);
+      const className = i18next.t(`trainerClasses:${toCamelCase(baseTitle)}`);
+      return `${className} ${this.overrideName}`;
+    }
+
     // Get the base title based on the trainer slot and variant.
     let name = this.config.getTitle(trainerSlot, this.variant);
 
@@ -656,6 +671,35 @@ export class Trainer extends Phaser.GameObjects.Container {
   }
 
   loadAssets(): Promise<void> {
+    if (this.overrideSpriteKey) {
+      const key = this.overrideSpriteKey;
+      return new Promise(resolve => {
+        globalScene.loadAtlas(key, "trainer");
+        globalScene.load.once(Phaser.Loader.Events.COMPLETE, () => {
+          const originalWarn = console.warn;
+          console.warn = () => {};
+          const frameNames = globalScene.anims.generateFrameNames(key, {
+            zeroPad: 4,
+            suffix: ".png",
+            start: 1,
+            end: 128,
+          });
+          console.warn = originalWarn;
+          if (!globalScene.anims.exists(key)) {
+            globalScene.anims.create({
+              key,
+              frames: frameNames,
+              frameRate: 24,
+              repeat: -1,
+            });
+          }
+          resolve();
+        });
+        if (!globalScene.load.isLoading()) {
+          globalScene.load.start();
+        }
+      });
+    }
     return this.config.loadAssets(this.variant);
   }
 

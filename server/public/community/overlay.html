@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Community Overlay</title>
+  <link rel="stylesheet" href="overlay-community.css">
+</head>
+<body>
+  <div class="community-overlay" id="overlay">
+
+    <!-- Header: Session Code + Wave -->
+    <div class="co-header">
+      <span class="co-code" id="co-code">----</span>
+      <span class="co-wave" id="co-wave">Wave 0</span>
+      <span class="co-biome" id="co-biome"></span>
+    </div>
+
+    <!-- Streamer Party -->
+    <div class="co-section" id="section-party">
+      <div class="co-section-title">Emmel's Team</div>
+      <div class="co-party" id="co-party">
+        <div class="co-empty">Kein Team geladen</div>
+      </div>
+    </div>
+
+    <!-- Trainer List -->
+    <div class="co-section" id="section-trainers">
+      <div class="co-section-title">Trainer</div>
+      <div class="co-trainers" id="co-trainers">
+        <div class="co-empty">Keine Trainer</div>
+      </div>
+    </div>
+
+    <!-- Active Gimmicks -->
+    <div class="co-section co-section-small" id="section-gimmicks" style="display:none;">
+      <div class="co-section-title">Gimmicks</div>
+      <div class="co-gimmicks" id="co-gimmicks"></div>
+    </div>
+
+    <!-- Active Vote -->
+    <div class="co-section co-section-small" id="section-vote" style="display:none;">
+      <div class="co-section-title">Abstimmung</div>
+      <div class="co-vote" id="co-vote"></div>
+    </div>
+
+    <!-- Embedded Chat Widget -->
+    <div class="co-embed co-embed-grow" id="section-chat" style="display:none;">
+      <iframe id="chat-iframe" allow="autoplay"></iframe>
+    </div>
+
+    <!-- Embedded Pokemon Catch Widget -->
+    <div class="co-embed co-embed-fixed" id="section-pokemon" style="display:none;">
+      <iframe id="pokemon-iframe" allow="autoplay"></iframe>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="overlay-community.js"></script>
+</body>
+</html>

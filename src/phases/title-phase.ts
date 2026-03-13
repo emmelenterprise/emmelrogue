@@ -1,6 +1,7 @@
 import { pokerogueApi } from "#api/pokerogue-api";
 import { loggedInUser } from "#app/account";
 import { raceManager } from "#app/emmelrogue/race-manager";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { GameMode, getGameMode } from "#app/game-mode";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
@@ -41,23 +42,133 @@ export class TitlePhase extends Phase {
 
     // Race mode autostart — skip title screen entirely
     if (raceManager.isRaceMode()) {
-      console.log("[Race] Autostart — waiting for seed...");
-      globalScene.ui.showText("Warte auf Race-Start...", null);
-      raceManager.onSeedReceived((seed, starterMode) => {
-        console.log("[Race] Seed received:", seed, "starterMode:", starterMode);
+      // Disable tutorials and set fast game speed for race mode
+      globalScene.enableTutorials = false;
+      globalScene.gameSpeed = 2;
+
+      const starterMode = raceManager.getStarterMode();
+      console.log("[Race] Autostart — seed already available:", !!raceManager.getSeed(), "mode:", starterMode);
+
+      // Both random and free mode use SelectStarterPhase.
+      // Random mode auto-populates starters in StarterSelectUiHandler.
+      const startRace = () => {
+        const seed = raceManager.getSeed()!;
+        globalScene.setSeed(seed);
+        globalScene.resetSeed();
+        console.log("[Race] Seed set:", seed);
+
+        const raceGameMode = raceManager.getGameMode();
+        this.gameMode = raceGameMode === "endless" ? GameModes.ENDLESS : GameModes.CLASSIC;
+        globalScene.ui.setMode(UiMode.MESSAGE);
         globalScene.ui.clearText();
-        if (starterMode === "random") {
-          // Random starters: use daily-run style (seeded starters, no selection)
-          this.initRaceWithRandomStarters();
-        } else {
-          // Free choice: Classic mode with StarterSelect
-          this.gameMode = GameModes.CLASSIC;
-          globalScene.ui.setMode(UiMode.MESSAGE);
+        this.end(); // pushes SelectStarterPhase
+      };
+
+      // If seed is already here (arrived before TitlePhase), start immediately
+      if (raceManager.getSeed()) {
+        console.log("[Race] Seed ready, starting immediately");
+        startRace();
+        return;
+      }
+
+      // Seed not yet received — poll for it
+      console.log("[Race] Waiting for seed from server...");
+      globalScene.ui.setMode(UiMode.MESSAGE);
+      globalScene.ui.showText("Warte auf Race-Start...");
+
+      let pollCount = 0;
+      const checkSeed = () => {
+        pollCount++;
+        if (raceManager.getSeed()) {
+          console.log(`[Race] Seed arrived after ${pollCount} polls:`, raceManager.getSeed());
           globalScene.ui.clearText();
-          this.end();
+          startRace();
+        } else {
+          // Timeout after 30s (300 polls × 100ms)
+          if (pollCount > 300) {
+            console.error("[Race] Seed timeout after 30s — returning to normal menu");
+            globalScene.ui.clearText();
+            globalScene.ui.showText("Race-Verbindung fehlgeschlagen.");
+            return;
+          }
+          globalScene.time.delayedCall(100, checkSeed);
         }
-      });
+      };
+      globalScene.time.delayedCall(100, checkSeed);
       return;
+    }
+
+    // PvP mode autostart — skip title screen, auto-create party from config
+    if (pvpBattle.isPvpActive()) {
+      globalScene.enableTutorials = false;
+      globalScene.gameSpeed = 2;
+
+      console.log("[PvP] Waiting for config...");
+      globalScene.ui.setMode(UiMode.MESSAGE);
+      globalScene.ui.showText("PvP-Kampf wird geladen...");
+
+      await pvpBattle.waitForConfig();
+      const config = pvpBattle.getConfig();
+
+      if (config && config.playerTeam.length > 0) {
+        console.log(`[PvP] Config ready: ${config.playerTeam.length} player pokemon, seed: ${config.seed}`);
+
+        globalScene.setSeed(config.seed);
+        globalScene.resetSeed();
+
+        this.gameMode = GameModes.CLASSIC;
+        globalScene.gameMode = getGameMode(GameModes.CLASSIC);
+
+        // Create player party from PvP config
+        // Seed RNG deterministically per side so both clients create identical Pokemon
+        // (same abilities, natures, IVs) regardless of creation order
+        Phaser.Math.RND.sow([config.seed + "_" + config.side]);
+
+        const party = globalScene.getPlayerParty();
+        const loadPokemonAssets: Promise<void>[] = [];
+        const level = config.playerLevel || 50;
+
+        for (const p of config.playerTeam) {
+          const species = getPokemonSpecies(p.speciesId);
+          const starterPokemon = globalScene.addPlayerPokemon(
+            species,
+            level,
+            undefined,
+            p.formIndex || 0,
+          );
+          starterPokemon.setVisible(false);
+          // Generate moveset (PlayerPokemon constructor leaves it empty unless isDaily)
+          starterPokemon.generateAndPopulateMoveset();
+          if (p.shiny) {
+            starterPokemon.shiny = true;
+            if (p.variant !== undefined) {
+              starterPokemon.variant = p.variant;
+            }
+          }
+          party.push(starterPokemon);
+          loadPokemonAssets.push(starterPokemon.loadAssets());
+        }
+
+        Promise.all(loadPokemonAssets).then(() => {
+          globalScene.ui.clearText();
+          globalScene.newArena(globalScene.gameMode.getStartingBiome());
+          globalScene.newBattle();
+          globalScene.arena.init();
+          globalScene.sessionPlayTime = 0;
+          globalScene.lastSavePlayTime = 0;
+          globalScene.loadBgm(globalScene.arena.bgm);
+          globalScene.time.delayedCall(500, () => globalScene.playBgm());
+
+          // Push EncounterPhase directly (skip SelectStarterPhase)
+          globalScene.phaseManager.pushNew("EncounterPhase", false);
+          super.end();
+        });
+        return;
+      }
+
+      // Config failed — fall through to normal title screen
+      console.error("[PvP] No config received, showing normal menu");
+      globalScene.ui.clearText();
     }
 
     const now = new Date();
@@ -69,79 +180,6 @@ export class TitlePhase extends Phase {
 
     const lastSlot = await this.checkLastSaveSlot();
     await this.showOptions(lastSlot);
-  }
-
-  /** Race mode with random starters — generates party from seed like daily run */
-  private initRaceWithRandomStarters(): void {
-    globalScene.phaseManager.clearPhaseQueue();
-    globalScene.sessionSlotId = 0;
-
-    const seed = raceManager.getSeed()!;
-    globalScene.gameMode = getGameMode(GameModes.CLASSIC);
-
-    globalScene.setSeed(seed);
-    globalScene.resetSeed();
-
-    globalScene.money = globalScene.gameMode.getStartingMoney();
-
-    const starters = getDailyRunStarters();
-    const startingLevel = globalScene.gameMode.getStartingLevel();
-
-    const party = globalScene.getPlayerParty();
-    const loadPokemonAssets: Promise<void>[] = [];
-    for (const starter of starters) {
-      const species = getPokemonSpecies(starter.speciesId);
-      const starterFormIndex = starter.formIndex;
-      const starterGender =
-        species.malePercent !== null ? (starter.female ? Gender.FEMALE : Gender.MALE) : Gender.GENDERLESS;
-      const starterPokemon = globalScene.addPlayerPokemon(
-        species,
-        startingLevel,
-        starter.abilityIndex,
-        starterFormIndex,
-        starterGender,
-        starter.shiny,
-        starter.variant,
-        starter.ivs,
-        starter.nature,
-      );
-      starterPokemon.setVisible(false);
-      if (starter.moveset) {
-        starterPokemon.tryPopulateMoveset(starter.moveset, true);
-      }
-      party.push(starterPokemon);
-      loadPokemonAssets.push(starterPokemon.loadAssets());
-    }
-
-    regenerateModifierPoolThresholds(party, ModifierPoolType.DAILY_STARTER);
-
-    const modifiers: Modifier[] = new Array(3)
-      .fill(null)
-      .map(() => modifierTypes.EXP_SHARE().withIdFromFunc(modifierTypes.EXP_SHARE).newModifier())
-      .concat(
-        new Array(3)
-          .fill(null)
-          .map(() => modifierTypes.GOLDEN_EXP_CHARM().withIdFromFunc(modifierTypes.GOLDEN_EXP_CHARM).newModifier()),
-      )
-      .concat(getDailyRunStarterModifiers(party))
-      .filter(m => m !== null);
-
-    for (const m of modifiers) {
-      globalScene.addModifier(m, true, false, false, true);
-    }
-    globalScene.updateModifiers(true, true);
-
-    Promise.all(loadPokemonAssets).then(() => {
-      globalScene.time.delayedCall(500, () => globalScene.playBgm());
-      globalScene.newArena(globalScene.gameMode.getStartingBiome());
-      globalScene.newBattle();
-      globalScene.arena.init();
-      globalScene.sessionPlayTime = 0;
-      globalScene.lastSavePlayTime = 0;
-      // Mark as loaded so end() treats it like a restored session (skips StarterSelect)
-      this.loaded = true;
-      this.end();
-    });
   }
 
   /**

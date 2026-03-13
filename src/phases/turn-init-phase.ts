@@ -1,4 +1,5 @@
 import { globalScene } from "#app/global-scene";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { BattlerIndex } from "#enums/battler-index";
 import { TurnInitEvent } from "#events/battle-scene";
 import type { PlayerPokemon } from "#field/pokemon";
@@ -47,6 +48,11 @@ export class TurnInitPhase extends FieldPhase {
     });
 
     globalScene.eventTarget.dispatchEvent(new TurnInitEvent());
+
+    // PvP: Signal new turn to the PvP manager
+    if (pvpBattle.isPvpActive()) {
+      pvpBattle.newTurn();
+    }
 
     handleMysteryEncounterBattleStartEffects();
 

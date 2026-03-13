@@ -1,4 +1,5 @@
 import { PLAYER_PARTY_MAX_SIZE } from "#app/constants";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
 import { IS_TEST, isBeta, isDev } from "#constants/app-constants";
@@ -292,6 +293,10 @@ export class AttemptCapturePhase extends PokemonPhase {
         };
         const addToParty = (slotIndex?: number) => {
           const newPokemon = pokemon.addToParty(this.pokeballType, slotIndex);
+          // Nuzlocke: mark this biome as caught
+          if (raceManager.isRaceMode() && raceManager.getNuzlockeCatch()) {
+            raceManager.markCaughtInBiome(globalScene.arena.biomeId);
+          }
           const modifiers = globalScene.findModifiers(m => m instanceof PokemonHeldItemModifier, false);
           if (globalScene.getPlayerParty().filter(p => p.isShiny()).length === PLAYER_PARTY_MAX_SIZE) {
             globalScene.validateAchv(achvs.SHINY_PARTY);

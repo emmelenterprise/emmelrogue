@@ -7,6 +7,7 @@ import type { AnySound, BattleScene } from "#app/battle-scene";
 import { EVOLVE_MOVE, PLAYER_PARTY_MAX_SIZE, RARE_CANDY_FRIENDSHIP_CAP, RELEARN_MOVE } from "#app/constants";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { getPokemonNameWithAffix } from "#app/messages";
 import Overrides from "#app/overrides";
 import { speciesEggMoves } from "#balance/egg-moves";
@@ -2977,6 +2978,13 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
       return false;
     }
 
+    // Race mode: guaranteed shiny
+    if (raceManager.isRaceMode() && raceManager.getShinyMode() === "guaranteed") {
+      this.shiny = true;
+      this.initShinySparkle();
+      return true;
+    }
+
     const rand1 = (this.id & 0xffff0000) >>> 16;
     const rand2 = this.id & 0x0000ffff;
 
@@ -2984,6 +2992,10 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
     const F = rand1 ^ rand2;
 
     const shinyThreshold = new NumberHolder(BASE_SHINY_CHANCE);
+    // Race mode: boosted shiny (3x chance)
+    if (raceManager.isRaceMode() && raceManager.getShinyMode() === "boosted" && thresholdOverride === undefined) {
+      shinyThreshold.value *= 3;
+    }
     if (thresholdOverride === undefined) {
       if (timedEventManager.isEventActive()) {
         const tchance = timedEventManager.getClassicTrainerShinyChance();
@@ -3029,6 +3041,10 @@ export abstract class Pokemon extends Phaser.GameObjects.Container {
     applyModifiersToOverride?: boolean,
     maxThreshold?: number,
   ): boolean {
+    // Race mode: guaranteed shiny
+    if (!this.shiny && raceManager.isRaceMode() && raceManager.getShinyMode() === "guaranteed") {
+      this.shiny = true;
+    }
     if (!this.shiny) {
       const shinyThreshold = new NumberHolder(thresholdOverride ?? BASE_SHINY_CHANCE);
       if (applyModifiersToOverride) {

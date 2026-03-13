@@ -1,0 +1,108 @@
+{
+  "enabled": true,
+  "claimMode": "limit_per_person",
+  "maxClaimsPerPerson": 7,
+  "waveBuffer": 2,
+  "allowCustomTrainers": true,
+  "allowShiny": true,
+  "shinyTrigger": {
+    "type": "bits",
+    "amount": 500
+  },
+  "categoryTriggers": {
+    "normal": {
+      "type": "free",
+      "amount": 0
+    },
+    "boss": {
+      "type": "free",
+      "amount": 0
+    },
+    "rival": {
+      "type": "free",
+      "amount": 0
+    },
+    "evil_team": {
+      "type": "free",
+      "amount": 0
+    },
+    "gym_leader": {
+      "type": "free",
+      "amount": 0
+    },
+    "elite_four": {
+      "type": "free",
+      "amount": 0
+    },
+    "champion": {
+      "type": "free",
+      "amount": 0
+    },
+    "custom": {
+      "type": "free",
+      "amount": 0
+    }
+  },
+  "surpriseMode": false,
+  "votingEnabled": true,
+  "voteOptions": [
+    {
+      "id": "double_10",
+      "label": "10 Doppelkaempfe"
+    },
+    {
+      "id": "trainer_only",
+      "label": "Nur Trainer-Kaempfe"
+    },
+    {
+      "id": "shiny_wave",
+      "label": "Alle Shinys"
+    },
+    {
+      "id": "level_boost",
+      "label": "Gegner +10 Level"
+    },
+    {
+      "id": "item_rain",
+      "label": "Doppelte Items"
+    },
+    {
+      "id": "luck_boost",
+      "label": "Max Glueck (14)"
+    }
+  ],
+  "gimmickTriggers": {
+    "double_10": {
+      "type": "vote",
+      "amount": 0
+    },
+    "trainer_only": {
+      "type": "bits",
+      "amount": 5000
+    },
+    "shiny_wave": {
+      "type": "sub_bomb",
+      "amount": 5
+    },
+    "level_boost": {
+      "type": "vote",
+      "amount": 0
+    },
+    "item_rain": {
+      "type": "channel_points",
+      "amount": 10000
+    },
+    "luck_boost": {
+      "type": "vote",
+      "amount": 0
+    }
+  },
+  "gimmickDurations": {
+    "double_10": 10,
+    "trainer_only": 10,
+    "shiny_wave": 5,
+    "level_boost": 10,
+    "item_rain": 10,
+    "luck_boost": 10
+  }
+}

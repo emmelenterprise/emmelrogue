@@ -1,3 +1,4 @@
+import { chatTrainers } from "#app/emmelrogue/chat-trainers";
 import { globalScene } from "#app/global-scene";
 import Overrides from "#app/overrides";
 import { ModifierPoolType } from "#enums/modifier-pool-type";
@@ -389,6 +390,11 @@ export class SelectModifierPhase extends BattlePhase {
       } else {
         modifierCountHolder.value = newItemCount;
       }
+    }
+
+    // Chat feature: item rain gimmick doubles rewards
+    if (chatTrainers.isActive() && chatTrainers.isItemRain()) {
+      modifierCountHolder.value *= 2;
     }
 
     return modifierCountHolder.value;

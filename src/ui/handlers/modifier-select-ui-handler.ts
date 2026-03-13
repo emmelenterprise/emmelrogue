@@ -541,14 +541,14 @@ export class ModifierSelectUiHandler extends AwaitableUiHandler {
       this.modifierContainer.add(this.cursorObj);
     }
 
-    const options = this.rowCursor === 1 ? this.options : this.shopOptionsRows.at(-(this.rowCursor - 1))!;
+    const options = this.rowCursor === 1 ? this.options : (this.shopOptionsRows.at(-(this.rowCursor - 1)) ?? []);
 
     this.cursorObj.setScale(this.rowCursor === 1 ? 2 : this.rowCursor >= 2 ? 1.5 : 1);
 
     // the modifier selection has been updated, always hide the overlay
     this.moveInfoOverlay.clear();
     if (this.rowCursor) {
-      if (this.rowCursor === 1 && options.length === 0) {
+      if (options.length === 0) {
         // Continue button when no shop items
         this.cursorObj.setScale(1.25);
         this.cursorObj.setPosition(
@@ -578,7 +578,8 @@ export class ModifierSelectUiHandler extends AwaitableUiHandler {
         );
       }
 
-      const type = options[this.cursor].modifierTypeOption.type;
+      const selectedOption = options?.[this.cursor];
+      const type = selectedOption?.modifierTypeOption?.type;
       type && ui.showText(type.getDescription());
       if (type instanceof TmModifierType) {
         // prepare the move overlay to be shown with the toggle
@@ -656,7 +657,7 @@ export class ModifierSelectUiHandler extends AwaitableUiHandler {
       case 1:
         return this.options.length;
       default:
-        return this.shopOptionsRows.at(-(rowCursor - 1))!.length;
+        return this.shopOptionsRows.at(-(rowCursor - 1))?.length ?? 0;
     }
   }
 
@@ -915,6 +916,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
             {
               delay: remainingDuration - 2000 * (this.modifierTypeOption.upgradeCount - (u + 1 + upgradeCountOffset)),
               onStart: () => {
+                if (!this.pb?.scene) return;
                 globalScene.playSound("se/upgrade", {
                   rate: 1 + 0.25 * u,
                 });
@@ -925,6 +927,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
               duration: 1000,
               ease: "Sine.easeIn",
               onComplete: () => {
+                if (!this.pb?.scene) return;
                 this.pb.setTexture("pb", this.getPbAtlasKey(-this.modifierTypeOption.upgradeCount + (u + 1)));
               },
             },
@@ -934,7 +937,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
               duration: 750,
               ease: "Sine.easeOut",
               onComplete: () => {
-                this.pbTint.setVisible(false);
+                if (this.pbTint?.scene) this.pbTint.setVisible(false);
                 resolve();
               },
             },
@@ -947,6 +950,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
     const finalPromises: Promise<void>[] = [];
     globalScene.time.delayedCall(remainingDuration + 2000, () => {
       if (isReward) {
+        if (!this.pb?.scene) return;
         this.pb.setTexture("pb", `${this.getPbAtlasKey(0)}_open`);
         globalScene.playSound("se/pb_rel");
 
@@ -958,7 +962,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
           ease: "Sine.easeIn",
           alpha: 0,
           onComplete: () => {
-            Promise.allSettled(animPromises).then(() => this.pb.destroy());
+            Promise.allSettled(animPromises).then(() => { if (this.pb?.scene) this.pb.destroy(); });
             pbResolve();
           },
         });
@@ -991,7 +995,7 @@ class ModifierOption extends Phaser.GameObjects.Container {
           duration: 500,
           ease: "Sine.easeIn",
           onComplete: () => {
-            this.itemTint.destroy();
+            if (this.itemTint?.scene) this.itemTint.destroy();
             itemTintResolve();
           },
         });

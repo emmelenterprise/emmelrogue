@@ -31,12 +31,20 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 2rem 1rem;
+  padding: 0.5rem 1rem;
 }
 
 .container {
   width: 100%;
   max-width: 480px;
+}
+
+.logo {
+  display: block;
+  margin: -0.5rem auto -1.5rem;
+  max-width: 440px;
+  height: auto;
+  filter: drop-shadow(0 0 20px var(--neon-glow));
 }
 
 .title {
@@ -54,14 +62,14 @@ body {
   text-align: center;
   color: var(--text-muted);
   font-size: 0.9rem;
-  margin-bottom: 2rem;
+  margin-bottom: 0.5rem;
 }
 
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
 }
 
 .card h2 {
@@ -426,8 +434,360 @@ input[type="text"]:focus {
   border-color: var(--green);
 }
 
+/* Select */
+.select {
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.select:focus {
+  border-color: var(--neon);
+}
+
+/* OBS URL */
+.obs-url-section {
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.obs-url-section label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+}
+
+.obs-url-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.obs-url-input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-family: 'Courier New', monospace;
+}
+
 .hidden {
   display: none !important;
+}
+
+/* --- Layout Preview --- */
+.layout-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0a0a12;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+}
+
+.lp-row {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.lp-row.cam-right {
+  flex-direction: row-reverse;
+}
+
+.lp-cam {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  transition: width 0.2s ease;
+}
+
+.lp-cam span {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--neon);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  z-index: 1;
+}
+
+/* Camera preview in layout configurator */
+.cam-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
+  z-index: 0;
+}
+
+.lp-cam {
+  position: relative;
+  overflow: hidden;
+  clip-path: inset(0);
+}
+
+.lp-cam.lp-hidden {
+  width: 0 !important;
+  border: none;
+  overflow: hidden;
+}
+
+.lp-cam.lp-hidden span {
+  display: none;
+}
+
+.lp-com {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f0f14;
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  transition: width 0.2s ease;
+}
+
+.lp-com span {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #a855f7;
+  letter-spacing: 0.05em;
+}
+
+.lp-com.lp-hidden {
+  width: 0 !important;
+  border: none;
+  overflow: hidden;
+}
+
+.lp-com.lp-hidden span {
+  display: none;
+}
+
+.lp-game {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+
+/* The actual visible game area (object-fit: contain simulation) */
+.lp-game-content {
+  background: #1a1a2e;
+  border: 1px dashed rgba(168, 85, 247, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  position: relative;
+  /* Will be sized by JS to show actual game area within the slot */
+}
+
+/* Game border indicators (black bars left/right) */
+.lp-game .lp-border-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(255, 60, 60, 0.15) 3px,
+    rgba(255, 60, 60, 0.15) 6px
+  );
+}
+.lp-game .lp-border-indicator.left {
+  left: 0;
+  border-right: 1px solid rgba(255, 60, 60, 0.6);
+}
+.lp-game .lp-border-indicator.right {
+  right: 0;
+  border-left: 1px solid rgba(255, 60, 60, 0.6);
+}
+.lp-game .lp-border-indicator span {
+  font-size: 0.4rem;
+  color: rgba(255, 80, 80, 0.8);
+  font-weight: 700;
+  writing-mode: vertical-lr;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.lp-sep {
+  height: 2px;
+  background: #222;
+  flex-shrink: 0;
+}
+
+/* Layout Controls */
+.layout-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.control-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.control-row label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.control-row label span {
+  color: var(--neon);
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+
+/* Range Slider */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  outline: none;
+  border: 1px solid var(--border);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--neon);
+  cursor: pointer;
+  box-shadow: 0 0 8px var(--neon-glow);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--neon);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 8px var(--neon-glow);
+}
+
+/* Editable value inputs next to slider labels */
+.val-input {
+  width: 52px;
+  padding: 1px 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--neon);
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  text-align: right;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.val-input::-webkit-outer-spin-button,
+.val-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.val-input:focus {
+  border-color: var(--neon);
+  box-shadow: 0 0 0 1px var(--neon-dim);
+}
+
+/* Control group labels (Game 1, Game 2) */
+.control-group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--neon);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 0.5rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--neon-dim);
+}
+
+/* Checkbox label in layout config */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  accent-color: var(--neon);
+  width: 16px;
+  height: 16px;
+}
+
+/* Collapsible layout config */
+.layout-toggle {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.layout-toggle::before {
+  content: '\25B6';
+  font-size: 0.6rem;
+  transition: transform 0.2s;
+}
+
+details[open] > .layout-toggle::before {
+  transform: rotate(90deg);
+}
+
+.layout-toggle:hover {
+  color: var(--neon);
 }
 
 /* Scrollbar */
@@ -444,4 +804,251 @@ input[type="text"]:focus {
 
 .btn-primary.pulse {
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* --- Gym Lobby --- */
+.btn-gym {
+  background: linear-gradient(135deg, #a855f7, #7c3aed);
+  color: white;
+  border: 1px solid #a855f7;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.btn-gym:hover {
+  background: linear-gradient(135deg, #c084fc, #a855f7);
+  box-shadow: 0 0 20px var(--neon-glow);
+}
+
+.btn-sm {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.gym-card {
+  padding: 1.25rem;
+}
+
+.gym-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.gym-header h2 {
+  margin-bottom: 0;
+  color: var(--neon);
+}
+.gym-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.gym-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(34,197,94,0.15);
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+
+.gym-team-section,
+.gym-challenger-section,
+.gym-queue-section {
+  margin-bottom: 1rem;
+}
+
+.gym-team-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
+.gym-preset-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0.5rem;
+}
+.gym-preset-tab {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+.gym-preset-tab:hover { border-color: var(--neon); color: var(--text-primary); }
+.gym-preset-tab.active {
+  background: rgba(168,85,247,0.15);
+  border-color: var(--neon);
+  color: var(--neon);
+}
+
+.gym-team-display {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-height: 40px;
+}
+.gym-poke-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+  border-radius: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+}
+
+.gym-challenger-slot {
+  padding: 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.gym-challenger-slot.has-challenger {
+  border-color: var(--neon);
+  box-shadow: 0 0 12px var(--neon-dim);
+}
+.gym-challenger-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--neon);
+}
+.gym-challenger-info {
+  flex: 1;
+}
+.gym-challenger-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.gym-challenger-team {
+  display: flex;
+  gap: 2px;
+  margin-top: 2px;
+}
+.gym-challenger-team img {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+.gym-waiting {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.gym-queue-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+.gym-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.gym-queue-item:last-child { border-bottom: none; }
+.gym-queue-pos {
+  color: var(--text-muted);
+  font-weight: 600;
+  min-width: 20px;
+}
+.gym-queue-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.gym-queue-name {
+  flex: 1;
+}
+.gym-queue-team {
+  display: flex;
+  gap: 1px;
+}
+.gym-queue-team img {
+  width: 18px;
+  height: 18px;
+  image-rendering: pixelated;
+}
+
+.gym-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.gym-config-link {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-decoration: none;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.gym-config-link:hover {
+  border-color: var(--neon);
+  color: var(--neon);
+}
+.gym-links {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.gym-link {
+  color: var(--neon);
+  text-decoration: none;
+}
+.gym-link:hover { text-decoration: underline; }
+
+.gym-queue-empty {
+  text-align: center;
+  padding: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+/* Community Link */
+.community-link {
+  text-align: center;
+  margin-top: 2rem;
+  padding: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.community-link a {
+  color: var(--neon);
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-decoration: none;
+  transition: text-shadow 0.3s;
+}
+
+.community-link a:hover {
+  text-shadow: 0 0 10px var(--neon-glow);
+}
+
+.community-link span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
 }

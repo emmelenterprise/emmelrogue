@@ -3,80 +3,81 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EmmelRogue Race Overlay</title>
+  <title>EmmelRogue Race</title>
   <link rel="stylesheet" href="overlay.css">
 </head>
 <body>
-  <!-- Layout: standard | mirrored | side-by-side | games-only -->
-  <div id="overlay" class="overlay layout-standard">
+  <div id="overlay" class="overlay">
 
-    <!-- Race Info Header -->
-    <div class="race-header" id="race-header">
-      <span class="race-header-code" id="race-header-code"></span>
-      <span class="race-header-mode" id="race-header-mode"></span>
+    <!-- Row 1: Spieler 1 -->
+    <div class="row" id="row-1">
+      <div class="cam-slot" id="cam-slot-1">
+        <video id="cam-1" autoplay playsinline muted></video>
+        <div class="slot-placeholder" id="placeholder-cam-1">
+          <div class="placeholder-label">CAM</div>
+        </div>
+      </div>
+      <div class="game-slot" id="game-slot-1">
+        <video id="game-1" autoplay playsinline muted></video>
+        <iframe id="game-iframe-1" class="game-iframe hidden" allow="camera;microphone;autoplay;gamepad" allowfullscreen></iframe>
+        <div class="slot-placeholder" id="placeholder-game-1">
+          <div class="placeholder-label">Warte auf Spieler 1...</div>
+        </div>
+        <!-- Player HUD overlay -->
+        <div class="player-hud" id="hud-1">
+          <span class="hud-name" id="hud-name-1">Spieler 1</span>
+          <span class="hud-wave" id="hud-wave-1">Wave 0</span>
+          <span class="hud-status" id="hud-status-1"></span>
+        </div>
+      </div>
+      <div class="community-slot hidden" id="community-slot-1">
+        <iframe id="community-iframe-1" class="community-iframe" allow=""></iframe>
+      </div>
+    </div>
+
+    <!-- 1px Separator -->
+    <div class="separator"></div>
+
+    <!-- Row 2: Spieler 2 -->
+    <div class="row" id="row-2">
+      <div class="cam-slot" id="cam-slot-2">
+        <video id="cam-2" autoplay playsinline muted></video>
+        <div class="slot-placeholder" id="placeholder-cam-2">
+          <div class="placeholder-label">CAM</div>
+        </div>
+      </div>
+      <div class="game-slot" id="game-slot-2">
+        <video id="game-2" autoplay playsinline muted></video>
+        <iframe id="game-iframe-2" class="game-iframe hidden" allow="camera;microphone;autoplay;gamepad" allowfullscreen></iframe>
+        <div class="slot-placeholder" id="placeholder-game-2">
+          <div class="placeholder-label">Warte auf Spieler 2...</div>
+        </div>
+        <!-- Player HUD overlay -->
+        <div class="player-hud" id="hud-2">
+          <span class="hud-name" id="hud-name-2">Spieler 2</span>
+          <span class="hud-wave" id="hud-wave-2">Wave 0</span>
+          <span class="hud-status" id="hud-status-2"></span>
+        </div>
+      </div>
+      <div class="community-slot hidden" id="community-slot-2">
+        <iframe id="community-iframe-2" class="community-iframe" allow=""></iframe>
+      </div>
+    </div>
+
+    <!-- Timer overlay (centered between rows) -->
+    <div class="timer-overlay" id="timer-overlay">
+      <span id="hud-timer">00:00</span>
     </div>
 
     <!-- Finish Banner (hidden by default) -->
     <div class="finish-banner hidden" id="finish-banner">
       <div class="finish-text" id="finish-text">SPIELER GEWINNT!</div>
       <div class="finish-sub" id="finish-sub"></div>
-    </div>
-
-    <div class="grid">
-      <!-- Quadrant 1: Top-Left -->
-      <div class="slot" id="slot-tl">
-        <video id="video-tl" autoplay playsinline muted></video>
-        <div class="slot-placeholder" id="placeholder-tl">
-          <div class="placeholder-name" id="name-tl">Spieler 1</div>
-          <div class="placeholder-sub">Cam</div>
-        </div>
-      </div>
-
-      <!-- Quadrant 2: Top-Right -->
-      <div class="slot" id="slot-tr">
-        <video id="video-tr" autoplay playsinline muted></video>
-        <div class="slot-placeholder" id="placeholder-tr">
-          <div class="placeholder-name" id="name-tr">Spieler 1</div>
-          <div class="placeholder-sub">Game</div>
-        </div>
-      </div>
-
-      <!-- Quadrant 3: Bottom-Left -->
-      <div class="slot" id="slot-bl">
-        <video id="video-bl" autoplay playsinline muted></video>
-        <div class="slot-placeholder" id="placeholder-bl">
-          <div class="placeholder-name" id="name-bl">Spieler 2</div>
-          <div class="placeholder-sub">Game</div>
-        </div>
-      </div>
-
-      <!-- Quadrant 4: Bottom-Right -->
-      <div class="slot" id="slot-br">
-        <video id="video-br" autoplay playsinline muted></video>
-        <div class="slot-placeholder" id="placeholder-br">
-          <div class="placeholder-name" id="name-br">Spieler 2</div>
-          <div class="placeholder-sub">Cam</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Race HUD -->
-    <div class="hud">
-      <div class="hud-player hud-p1">
-        <span class="hud-name" id="hud-name-p1">Spieler 1</span>
-        <span class="hud-wave" id="hud-wave-p1">Wave 0</span>
-        <span class="hud-status" id="hud-status-p1"></span>
-      </div>
-      <div class="hud-timer" id="hud-timer">00:00</div>
-      <div class="hud-player hud-p2">
-        <span class="hud-name" id="hud-name-p2">Spieler 2</span>
-        <span class="hud-wave" id="hud-wave-p2">Wave 0</span>
-        <span class="hud-status" id="hud-status-p2"></span>
-      </div>
+      <button class="btn-lobby hidden" id="btn-lobby">Zurück zur Lobby</button>
     </div>
   </div>
 
-  <!-- Connection status (hidden in OBS, visible for debugging) -->
+  <!-- Debug (hidden by default) -->
   <div id="debug" class="debug hidden">
     <span id="debug-text">Connecting...</span>
   </div>

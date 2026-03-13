@@ -1,4 +1,5 @@
 import { applyAbAttrs } from "#abilities/apply-ab-attrs";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { SubstituteTag } from "#data/battler-tags";
@@ -46,6 +47,27 @@ export class SwitchSummonPhase extends SummonPhase {
   preSummon(): void {
     if (!this.player) {
       if (this.slotIndex === -1) {
+        // PvP: wait for opponent's faint switch choice instead of AI
+        if (pvpBattle.isPvpActive()) {
+          pvpBattle.waitForFaintSwitch().then((idx) => {
+            if (idx >= 0) {
+              //@ts-expect-error — readonly override for PvP relay
+              this.slotIndex = idx;
+            } else {
+              // Timeout fallback: pick first available
+              const party = globalScene.getEnemyParty();
+              const available = party.findIndex((p, i) => p.isActive() && !p.isOnField());
+              //@ts-expect-error
+              this.slotIndex = available >= 0 ? available : 0;
+            }
+            console.log(`[PvP] Enemy faint switch to slot ${this.slotIndex}`);
+            this.showEnemyTrainer(this.fieldIndex % 2 ? TrainerSlot.TRAINER_PARTNER : TrainerSlot.TRAINER);
+            globalScene.pbTrayEnemy.showPbTray(globalScene.getEnemyParty());
+            this.continuePreSummon();
+          });
+          return;
+        }
+
         //@ts-expect-error
         this.slotIndex = globalScene.currentBattle.trainer?.getNextSummonIndex(
           this.fieldIndex ? TrainerSlot.TRAINER_PARTNER : TrainerSlot.TRAINER,
@@ -57,6 +79,15 @@ export class SwitchSummonPhase extends SummonPhase {
       }
     }
 
+    // PvP: relay player's faint switch choice to opponent (only for faint switches, not voluntary)
+    if (this.player && pvpBattle.isPvpActive() && !this.doReturn) {
+      pvpBattle.sendFaintSwitch(this.slotIndex);
+    }
+
+    this.continuePreSummon();
+  }
+
+  private continuePreSummon(): void {
     if (
       !this.doReturn
       || (this.slotIndex !== -1

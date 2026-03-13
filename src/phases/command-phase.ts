@@ -1,4 +1,6 @@
 import type { TurnCommand } from "#app/battle";
+import { raceManager } from "#app/emmelrogue/race-manager";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import { speciesStarterCosts } from "#balance/starters";
@@ -392,6 +394,19 @@ export class CommandPhase extends FieldPhase {
       this.queueShowText("battle:noPokeballTrainer");
     } else if (currentBattle.isBattleMysteryEncounter() && !currentBattle.mysteryEncounter!.catchAllowed) {
       this.queueShowText("battle:noPokeballMysteryEncounter");
+    } else if (raceManager.isRaceMode() && raceManager.getNuzlockeCatch() && raceManager.hasCaughtInBiome(biomeId)) {
+      globalScene.ui.setMode(UiMode.COMMAND, this.fieldIndex);
+      globalScene.ui.setMode(UiMode.MESSAGE);
+      globalScene.ui.showText(
+        "Nuzlocke: Nur der erste Fang pro Biom ist erlaubt!",
+        null,
+        () => {
+          globalScene.ui.showText("", 0);
+          globalScene.ui.setMode(UiMode.COMMAND, this.fieldIndex);
+        },
+        null,
+        true,
+      );
     } else {
       return true;
     }
@@ -639,6 +654,23 @@ export class CommandPhase extends FieldPhase {
     }
 
     if (success) {
+      // PvP: Send player's command to server so opponent receives it
+      if (pvpBattle.isPvpActive()) {
+        const turnCmd = globalScene.currentBattle.turnCommands[this.fieldIndex];
+        if (turnCmd) {
+          pvpBattle.sendPlayerMove({
+            command: turnCmd.command,
+            cursor: turnCmd.cursor,
+            move: turnCmd.move ? {
+              move: turnCmd.move.move,
+              targets: turnCmd.move.targets,
+              useMode: turnCmd.move.useMode,
+            } : undefined,
+            args: turnCmd.args,
+            skip: turnCmd.skip,
+          });
+        }
+      }
       this.end();
     }
 
