@@ -155,21 +155,27 @@
 
     <!-- Team Editor Modal -->
     <div id="team-modal" class="modal" style="display:none">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width:700px;">
         <div class="modal-header">
           <h3>Team bearbeiten — Welle <span id="modal-wave">0</span></h3>
           <button id="btn-close-modal" class="btn btn-small">X</button>
         </div>
         <div class="modal-body">
+          <p class="muted" style="font-size:0.8rem;margin-bottom:0.75rem;">Suche ein Pokemon oder klicke im Grid. Budget = max. Gesamtkosten deines Teams.</p>
           <div class="budget-bar">
             <span>Budget: <span id="budget-current">0</span> / <span id="budget-max">0</span></span>
             <div class="budget-fill" id="budget-fill"></div>
           </div>
           <div id="party-slots"></div>
+          <div style="display:flex;gap:6px;margin-bottom:0.75rem;flex-wrap:wrap;">
+            <button id="btn-random-team" class="btn btn-accent" style="flex:1;min-width:140px;">&#127922; Random Team</button>
+            <button id="btn-load-last-team" class="btn" style="flex:1;min-width:140px;">&#128190; Letztes Team laden</button>
+          </div>
           <div class="pokemon-search">
-            <input type="text" id="pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+            <input type="text" id="pokemon-search" placeholder="Pokemon suchen oder durchs Grid scrollen..." autocomplete="off">
             <div id="pokemon-suggestions" class="suggestions" style="display:none"></div>
           </div>
+          <div id="pokemon-grid" style="max-height:400px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:4px;margin-top:8px;padding:4px;border:1px solid var(--border,#333);border-radius:8px;background:rgba(0,0,0,0.2);"></div>
         </div>
         <div class="modal-footer">
           <button id="btn-save-team" class="btn btn-accent">Speichern</button>
@@ -180,12 +186,13 @@
 
     <!-- Insert Custom Trainer Modal -->
     <div id="insert-modal" class="modal" style="display:none">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width:700px;">
         <div class="modal-header">
           <h3>Custom Trainer einfügen</h3>
           <button id="btn-close-insert" class="btn btn-small">X</button>
         </div>
         <div class="modal-body">
+          <p class="muted" style="font-size:0.8rem;margin-bottom:0.75rem;">Suche ein Pokemon oder klicke im Grid. Budget = max. Gesamtkosten deines Teams.</p>
           <div class="field" style="margin-bottom:1rem;">
             <label>Welle (Wild-Encounter wird zu Trainer)</label>
             <input type="number" id="insert-wave" min="1" max="200" placeholder="z.B. 7" autocomplete="off" style="width:100px; text-align:center; font-size:1.2rem;">
@@ -200,10 +207,15 @@
             <div class="budget-fill" id="insert-budget-fill"></div>
           </div>
           <div id="insert-party-slots"></div>
+          <div style="display:flex;gap:6px;margin-bottom:0.75rem;flex-wrap:wrap;">
+            <button id="btn-insert-random-team" class="btn btn-accent" style="flex:1;min-width:140px;">&#127922; Random Team</button>
+            <button id="btn-insert-load-last" class="btn" style="flex:1;min-width:140px;">&#128190; Letztes Team laden</button>
+          </div>
           <div class="pokemon-search">
-            <input type="text" id="insert-pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+            <input type="text" id="insert-pokemon-search" placeholder="Pokemon suchen oder durchs Grid scrollen..." autocomplete="off">
             <div id="insert-pokemon-suggestions" class="suggestions" style="display:none"></div>
           </div>
+          <div id="insert-pokemon-grid" style="max-height:400px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:4px;margin-top:8px;padding:4px;border:1px solid var(--border,#333);border-radius:8px;background:rgba(0,0,0,0.2);"></div>
         </div>
         <div class="modal-footer">
           <button id="btn-save-insert" class="btn btn-accent">Trainer erstellen</button>

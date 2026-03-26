@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "claimMode": "limit_per_person",
-  "maxClaimsPerPerson": 7,
+  "maxClaimsPerPerson": 9,
   "waveBuffer": 2,
   "allowCustomTrainers": true,
   "allowShiny": true,
@@ -97,6 +97,43 @@
       "amount": 0
     }
   },
+  "fixedTrainerOverrides": {
+    "5": {
+      "trainerClass": "Youngster/Goere",
+      "isBoss": false
+    },
+    "_comment": "Override fuer Fixed-Trainer. Key = Welle, Value = { trainerClass, isBoss }. Leerer Eintrag = Default aus dem Spiel."
+  },
+  "budgetTiers": [
+    {
+      "maxWave": 10,
+      "budget": 6
+    },
+    {
+      "maxWave": 30,
+      "budget": 10
+    },
+    {
+      "maxWave": 50,
+      "budget": 16
+    },
+    {
+      "maxWave": 80,
+      "budget": 22
+    },
+    {
+      "maxWave": 120,
+      "budget": 30
+    },
+    {
+      "maxWave": 160,
+      "budget": 38
+    },
+    {
+      "maxWave": 999,
+      "budget": 48
+    }
+  ],
   "gimmickDurations": {
     "double_10": 10,
     "trainer_only": 10,

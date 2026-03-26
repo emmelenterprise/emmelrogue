@@ -45,10 +45,14 @@ function setupSocketListeners(): void {
   if (!socket || socketListenersRegistered) return;
   socketListenersRegistered = true;
 
-  socket.on("CHAT_SESSION_STARTED", (data: { sessionId: string; code?: string }) => {
+  socket.on("CHAT_SESSION_STARTED", (data: { sessionId: string; code?: string; fixedTrainerOverrides?: Record<string, { trainerClass: string; isBoss: boolean }> }) => {
     state.sessionId = data.sessionId;
     state.enabled = true;
     console.log(`${PREFIX} Session started: ${data.sessionId} (code: ${data.code || "?"})`);
+    // Apply config overrides for fixed trainer waves
+    if (data.fixedTrainerOverrides) {
+      applyFixedTrainerOverrides(data.fixedTrainerOverrides);
+    }
     // Pre-register known fixed trainer waves so community can claim them early
     prescanFixedTrainers();
     // Flush any pending data that was queued before session was ready
@@ -103,7 +107,7 @@ function setupSocketListeners(): void {
 }
 
 // Known fixed trainer waves (Classic mode) for pre-registration
-const FIXED_TRAINER_WAVES = [
+const DEFAULT_FIXED_TRAINER_WAVES = [
   { waveIndex: 5, trainerClass: "Youngster/Göre", isFixed: true, isBoss: false },
   { waveIndex: 8, trainerClass: "Rivale", isFixed: true, isBoss: false },
   { waveIndex: 25, trainerClass: "Rivale", isFixed: true, isBoss: false },
@@ -126,6 +130,30 @@ const FIXED_TRAINER_WAVES = [
   { waveIndex: 190, trainerClass: "Champion", isFixed: true, isBoss: true },
   { waveIndex: 195, trainerClass: "Rivale", isFixed: true, isBoss: false },
 ];
+
+// Apply server-side overrides from config (fixedTrainerOverrides in chat-config.json)
+let FIXED_TRAINER_WAVES = [...DEFAULT_FIXED_TRAINER_WAVES];
+
+function applyFixedTrainerOverrides(overrides: Record<string, { trainerClass: string; isBoss: boolean }>) {
+  if (!overrides || typeof overrides !== "object") return;
+  FIXED_TRAINER_WAVES = DEFAULT_FIXED_TRAINER_WAVES.map(t => {
+    const override = overrides[String(t.waveIndex)];
+    if (override) {
+      return { ...t, trainerClass: override.trainerClass || t.trainerClass, isBoss: override.isBoss ?? t.isBoss };
+    }
+    return t;
+  });
+  // Add new waves from overrides that aren't in defaults
+  for (const [wave, data] of Object.entries(overrides)) {
+    const waveNum = parseInt(wave);
+    if (isNaN(waveNum) || wave.startsWith("_")) continue;
+    if (!FIXED_TRAINER_WAVES.some(t => t.waveIndex === waveNum)) {
+      FIXED_TRAINER_WAVES.push({ waveIndex: waveNum, trainerClass: data.trainerClass, isFixed: true, isBoss: data.isBoss ?? false });
+    }
+  }
+  FIXED_TRAINER_WAVES.sort((a, b) => a.waveIndex - b.waveIndex);
+  console.log(`${PREFIX} Fixed trainer overrides applied: ${FIXED_TRAINER_WAVES.length} waves`);
+}
 
 function prescanFixedTrainers(): void {
   const socket = getSocket();

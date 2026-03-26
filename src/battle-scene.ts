@@ -1352,15 +1352,18 @@ export class BattleScene extends SceneBase {
         this.field.add(newTrainer);
       }
 
-      // Check for mystery encounter
-      // Can only occur in place of a standard (non-boss) wild battle, waves 10-180
-      if (
-        !Overrides.BATTLE_TYPE_OVERRIDE
-        && (this.isWaveMysteryEncounter(newBattleType, newWaveIndex) || newBattleType === BattleType.MYSTERY_ENCOUNTER)
-      ) {
-        newBattleType = BattleType.MYSTERY_ENCOUNTER;
-        // Reset to base spawn weight
-        this.mysteryEncounterSaveData.encounterSpawnChance = BASE_MYSTERY_ENCOUNTER_SPAWN_WEIGHT;
+      // EmmelRogue: Mystery Encounters komplett deaktiviert
+      // Originalcode:
+      // if (
+      //   !Overrides.BATTLE_TYPE_OVERRIDE
+      //   && (this.isWaveMysteryEncounter(newBattleType, newWaveIndex) || newBattleType === BattleType.MYSTERY_ENCOUNTER)
+      // ) {
+      //   newBattleType = BattleType.MYSTERY_ENCOUNTER;
+      //   this.mysteryEncounterSaveData.encounterSpawnChance = BASE_MYSTERY_ENCOUNTER_SPAWN_WEIGHT;
+      // }
+      // Falls ein Savegame MYSTERY_ENCOUNTER hatte, auf WILD zurücksetzen
+      if (newBattleType === BattleType.MYSTERY_ENCOUNTER) {
+        newBattleType = BattleType.WILD;
       }
     }
 
@@ -3534,6 +3537,8 @@ export class BattleScene extends SceneBase {
    * @param waveIndex
    */
   private isWaveMysteryEncounter(newBattleType: BattleType, waveIndex: number): boolean {
+    // EmmelRogue: Mystery Encounters komplett deaktiviert — überschreiben Custom Trainer
+    return false;
     const [lowestMysteryEncounterWave, highestMysteryEncounterWave] = this.gameMode.getMysteryEncounterLegalWaves();
     if (this.isMysteryEncounterValidForWave(newBattleType, waveIndex)) {
       // Base spawn weight is BASE_MYSTERY_ENCOUNTER_SPAWN_WEIGHT/256, and increases by WEIGHT_INCREMENT_ON_SPAWN_MISS/256 for each missed attempt at spawning an encounter on a valid floor

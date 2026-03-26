@@ -1,5 +1,6 @@
 import { globalScene } from "#app/global-scene";
 import type { Pokemon } from "#field/pokemon";
+import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 
 export class PokeballTray extends Phaser.GameObjects.Container {
   private player: boolean;
@@ -58,11 +59,17 @@ export class PokeballTray extends Phaser.GameObjects.Container {
       this.bg.width = 104;
       this.bg.alpha = 1;
 
+      // In PvP, hide enemy team status (only active pokemon shows true state)
+      const hidePvpEnemy = !this.player && pvpBattle.isPvpActive();
+
       this.balls.forEach((ball, b) => {
         ball.x += (globalScene.scaledCanvas.width + 104) * (this.player ? 1 : -1);
         let ballFrame = "ball";
         if (b >= party.length) {
           ballFrame = "empty";
+        } else if (hidePvpEnemy && b > 0) {
+          // PvP: non-active enemy pokemon always show as normal ball
+          ballFrame = "ball";
         } else if (!party[b].hp) {
           ballFrame = "faint";
         } else if (party[b].status) {

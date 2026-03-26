@@ -163,7 +163,7 @@ header {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
-  width: 100px;
+  width: 130px;
   position: relative;
 }
 .team-slot img { width: 40px; height: 40px; image-rendering: pixelated; }
@@ -543,6 +543,97 @@ header {
   margin-top: 2px;
 }
 .shiny-toggle:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+
+/* --- Move Slots --- */
+.move-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  width: 100%;
+}
+.move-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.move-input {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.6rem;
+  padding: 2px 4px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.move-input:focus { border-color: var(--accent); }
+.move-input.is-egg { border-color: var(--yellow); color: var(--yellow); }
+.move-input::placeholder { color: var(--text-muted); font-size: 0.55rem; }
+.move-clear {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+.move-results {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+.move-results.show { display: block; }
+.move-result-item {
+  padding: 4px 6px;
+  font-size: 0.6rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.move-result-item:hover { background: var(--accent-dark); color: white; }
+.move-result-item:last-child { border-bottom: none; }
+.move-result-item.egg-move { border-left: 3px solid var(--yellow); }
+.move-result-item.tm-move { border-left: 3px solid var(--blue); }
+.move-en { color: var(--text-muted); font-size: 0.55rem; }
+.move-input.is-tm { border-color: var(--blue); color: var(--blue); }
+.egg-tag {
+  background: var(--yellow);
+  color: #000;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+.tm-tag {
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.5rem;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+.move-no-results {
+  padding: 6px;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+}
 
 /* --- Drag and Drop --- */
 .team-slot[draggable="true"] { cursor: grab; }

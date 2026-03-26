@@ -44,10 +44,53 @@ const DEFAULT_CONFIG = {
 // Role hierarchy for permission checks
 const ROLE_HIERARCHY = ['everyone', 'follower', 'sub1', 'sub2', 'sub3', 'vip', 'mod'];
 
+// --- Persistence ---
+const PERSIST_FILE = path.join(__dirname, '..', 'data', 'gym-persist.json');
+
+function loadPersisted() {
+  try {
+    if (fs.existsSync(PERSIST_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(PERSIST_FILE, 'utf-8'));
+      if (raw.badges) {
+        for (const [k, v] of Object.entries(raw.badges)) badges.set(k, v);
+      }
+      if (raw.config) Object.assign(persistedConfig, raw.config);
+      if (raw.presets) persistedPresets = raw.presets;
+      console.log(`[Gym] Loaded persisted data: ${badges.size} badges, ${persistedPresets.length} presets`);
+    }
+  } catch (e) {
+    console.warn('[Gym] Failed to load persisted data:', e.message);
+  }
+}
+
+function savePersisted() {
+  try {
+    const data = {
+      badges: Object.fromEntries(badges),
+      config: persistedConfig,
+      presets: persistedPresets,
+    };
+    fs.writeFileSync(PERSIST_FILE, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.warn('[Gym] Failed to save persisted data:', e.message);
+  }
+}
+
+// Persisted config (survives restart)
+let persistedConfig = {};
+let persistedPresets = [
+  { name: 'Team 1', team: [], spriteKey: 'gym_leader_brock' },
+  { name: 'Team 2', team: [], spriteKey: 'gym_leader_brock' },
+  { name: 'Team 3', team: [], spriteKey: 'gym_leader_brock' },
+];
+
 // --- State ---
 let gymSession = null;
-const badges = new Map(); // persists across sessions within process
-const knownRoles = new Map(); // twitchId -> role (from chat commands)
+const badges = new Map();
+const knownRoles = new Map();
+
+// Load on startup
+loadPersisted();
 
 // --- Helpers ---
 function getPokemonCost(speciesId) {
@@ -114,16 +157,12 @@ function createSession() {
     bossTeam: [],
     bossBudget: 0,
     bossSprite: 'gym_leader_brock',
-    activeBossPreset: 0, // which of the 3 presets is active
-    bossTeamPresets: [
-      { name: 'Team 1', team: [], spriteKey: 'gym_leader_brock' },
-      { name: 'Team 2', team: [], spriteKey: 'gym_leader_brock' },
-      { name: 'Team 3', team: [], spriteKey: 'gym_leader_brock' },
-    ],
+    activeBossPreset: 0,
+    bossTeamPresets: persistedPresets.map(p => ({ ...p, team: [...(p.team || [])] })),
     queue: [],
     currentChallenger: null,
     currentChallengerSince: null,
-    config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)),
+    config: { ...JSON.parse(JSON.stringify(DEFAULT_CONFIG)), ...persistedConfig },
     matchHistory: [],
     kickedUsers: new Set(),
   };
@@ -144,7 +183,7 @@ function getSession() {
 }
 
 function getState() {
-  if (!gymSession) return { active: false };
+  if (!gymSession) return { active: false, persistedPresets: persistedPresets.map(p => ({ ...p, team: [...(p.team || [])] })) };
   return {
     active: true,
     id: gymSession.id,
@@ -161,6 +200,7 @@ function getState() {
     matchHistory: gymSession.matchHistory.slice(-20),
     leaderboard: getLeaderboard().slice(0, 10),
     activeBattleId: gymSession.activeBattleId || null,
+    revealedBossSlots: gymSession.revealedBossSlots || [],
   };
 }
 
@@ -197,6 +237,9 @@ function buildTeamArray(team) {
     if (p.shiny) {
       entry.shiny = true;
       entry.variant = typeof p.variant === 'number' ? p.variant : 0;
+    }
+    if (p.moves && Array.isArray(p.moves)) {
+      entry.moves = p.moves.slice(0, 4);
     }
     return entry;
   });
@@ -237,7 +280,6 @@ function setBossTeam(team, spriteKey) {
 }
 
 function saveBossPreset(presetIndex, team, spriteKey, presetName) {
-  if (!gymSession) return { success: false, error: 'Keine Session aktiv' };
   if (presetIndex < 0 || presetIndex > 2) return { success: false, error: 'Preset Index 0-2' };
   if (!team || !Array.isArray(team) || team.length > 6) {
     return { success: false, error: 'Team muss 0-6 Pokemon haben' };
@@ -250,11 +292,20 @@ function saveBossPreset(presetIndex, team, spriteKey, presetName) {
   }
 
   const builtTeam = team.length > 0 ? buildTeamArray(team) : [];
-  gymSession.bossTeamPresets[presetIndex] = {
+  const presetData = {
     name: presetName || `Team ${presetIndex + 1}`,
     team: builtTeam,
     spriteKey: spriteKey || 'gym_leader_brock',
   };
+
+  // Update session if active
+  if (gymSession) {
+    gymSession.bossTeamPresets[presetIndex] = presetData;
+  }
+
+  // Always persist
+  persistedPresets[presetIndex] = { ...presetData };
+  savePersisted();
 
   console.log(`[Gym] Preset ${presetIndex + 1} saved: ${builtTeam.map(p => p.name).join(', ') || '(leer)'}`);
   return { success: true };
@@ -445,6 +496,7 @@ function awardBadge(twitchId, displayName) {
     promoteNext();
   }
 
+  savePersisted(); // Persist badges
   console.log(`[Gym] Badge awarded to ${displayName} (total: ${existing.count})`);
   return { totalBadges: existing.count };
 }
@@ -506,6 +558,10 @@ function updateConfig(patch) {
     cfg.challengerEggMoves = patch.challengerEggMoves;
   }
   if (patch.eggMoveCost !== undefined) cfg.eggMoveCost = Math.max(0, Math.min(20, parseInt(patch.eggMoveCost) || 3));
+
+  // Persist config
+  persistedConfig = { ...cfg };
+  savePersisted();
 
   console.log(`[Gym] Config updated: ${Object.keys(patch).join(', ')}`);
   return cfg;

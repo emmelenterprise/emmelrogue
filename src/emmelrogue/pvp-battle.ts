@@ -1,4 +1,5 @@
 import { getSocket } from "./multiplayer";
+import { startPvpCam, stopPvpCam } from "./webrtc";
 
 const PREFIX = "[PvP]";
 
@@ -32,8 +33,9 @@ export interface PvpBattleConfig {
   battleId: string;
   side: "boss" | "challenger";
   seed: string;
-  playerTeam: { speciesId: number; formIndex?: number; shiny?: boolean; variant?: number; name: string; cost: number }[];
-  opponentTeam: { speciesId: number; formIndex?: number; shiny?: boolean; variant?: number; name: string; cost: number }[];
+  battleSeed: string;     // Shared RNG seed for battle — identical on both clients
+  playerTeam: { speciesId: number; formIndex?: number; shiny?: boolean; variant?: number; name: string; cost: number; moves?: (number | null)[] }[];
+  opponentTeam: { speciesId: number; formIndex?: number; shiny?: boolean; variant?: number; name: string; cost: number; moves?: (number | null)[] }[];
   opponentName: string;
   opponentSprite: string;
   playerLevel: number;    // Base level for all pokemon
@@ -180,6 +182,11 @@ export const pvpBattle = {
     return state.side;
   },
 
+  /** Get shared battle RNG seed (identical on both clients) */
+  getBattleSeed(): string | null {
+    return state.config?.battleSeed || null;
+  },
+
   /** Initialize PvP battle from URL params or gym system */
   init(): void {
     setupSocketListeners();
@@ -207,6 +214,11 @@ export const pvpBattle = {
       state.battleId = config.battleId;
       state.side = config.side;
       console.log(`${PREFIX} Config loaded: ${config.playerTeam.length} player pokemon, ${config.opponentTeam.length} opponent pokemon`);
+
+      // Start webcam streaming for challenger
+      if (config.side === "challenger") {
+        startPvpCam(config.battleId);
+      }
 
       // Signal that config is ready
       if (configReadyResolve) {
@@ -256,6 +268,11 @@ export const pvpBattle = {
     console.log(`${PREFIX} Battle started: ${config.battleId} as ${config.side}`);
     console.log(`${PREFIX} Player team: ${config.playerTeam.map(p => p.name).join(", ")}`);
     console.log(`${PREFIX} Opponent team: ${config.opponentTeam.map(p => p.name).join(", ")}`);
+
+    // Start webcam streaming for challenger
+    if (config.side === "challenger") {
+      startPvpCam(config.battleId);
+    }
   },
 
   /** Called when a new turn begins */
@@ -404,6 +421,7 @@ export const pvpBattle = {
   /** End PvP battle */
   endBattle(): void {
     console.log(`${PREFIX} Battle ended`);
+    stopPvpCam();
     state.active = false;
     state.battleId = null;
     state.side = null;

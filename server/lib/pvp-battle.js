@@ -15,6 +15,7 @@ class BattleRoom {
   constructor(battleId, config) {
     this.battleId = battleId;
     this.seed = config.seed || this.generateSeed();
+    this.battleSeed = this.generateSeed(); // Shared battle RNG seed — identical on both clients
     this.bossTeam = config.bossTeam || [];
     this.challengerTeam = config.challengerTeam || [];
     this.bossName = config.bossName || 'Gym Leader';
@@ -37,6 +38,9 @@ class BattleRoom {
 
     // Result
     this.result = null; // { winner: 'boss'|'challenger', reason: string }
+
+    // Track which boss pokemon slots have been revealed (sent into battle)
+    this.revealedBossSlots = new Set();
   }
 
   generateSeed() {
@@ -59,6 +63,8 @@ class BattleRoom {
     if (this.bossSid && this.challengerSid && this.status === 'waiting') {
       this.status = 'active';
       this.turn = 1;
+      // Lead pokemon (slot 0) is always revealed
+      this.revealedBossSlots.add(0);
       console.log(`${PREFIX} Battle ${this.battleId} started!`);
       return true; // battle started
     }
@@ -110,12 +116,25 @@ class BattleRoom {
     this.result = { winner, reason };
   }
 
+  revealBossSlot(index) {
+    if (typeof index !== 'number' || index < 0 || index > 5) return false;
+    if (this.revealedBossSlots.has(index)) return false;
+    this.revealedBossSlots.add(index);
+    console.log(`${PREFIX} Boss slot ${index} revealed (total: ${this.revealedBossSlots.size})`);
+    return true; // new reveal
+  }
+
+  getRevealedBossSlots() {
+    return Array.from(this.revealedBossSlots).sort((a, b) => a - b);
+  }
+
   getConfigForSide(side) {
     if (side === 'boss') {
       return {
         battleId: this.battleId,
         side: 'boss',
         seed: this.seed,
+        battleSeed: this.battleSeed,
         playerTeam: this.bossTeam,
         opponentTeam: this.challengerTeam,
         opponentName: this.challengerName,
@@ -129,6 +148,7 @@ class BattleRoom {
         battleId: this.battleId,
         side: 'challenger',
         seed: this.seed,
+        battleSeed: this.battleSeed,
         playerTeam: this.challengerTeam,
         opponentTeam: this.bossTeam,
         opponentName: this.bossName,
@@ -209,7 +229,7 @@ const pvpBattleManager = {
   /**
    * Setup Socket.io event handlers for PvP
    */
-  setupSocketHandlers(io, socket) {
+  setupSocketHandlers(io, socket, onBossReveal, onBattleEnd) {
     // Player joins a battle room
     socket.on('PVP_JOIN_BATTLE', (data) => {
       const { battleId, side } = data;
@@ -240,6 +260,15 @@ const pvpBattleManager = {
       const { battleId, side, turn, move } = data;
       const room = battles.get(battleId);
       if (!room) return;
+
+      // Track boss pokemon switches (command=2 is POKEMON switch)
+      if (side === 'boss' && move && move.command === 2 && typeof move.cursor === 'number') {
+        if (room.revealBossSlot(move.cursor)) {
+          const slots = room.getRevealedBossSlots();
+          io.to('gym').emit('GYM_BOSS_REVEAL', { battleId, revealedSlots: slots });
+          if (onBossReveal) onBossReveal(battleId, slots);
+        }
+      }
 
       const result = room.submitMove(side, turn, move);
       if (result) {
@@ -287,6 +316,7 @@ const pvpBattleManager = {
         });
 
         console.log(`${PREFIX} Battle ${battleId} ended — winner: ${winner}`);
+        if (onBattleEnd) onBattleEnd(battleId, winner, 'battle_complete');
       }
     });
 
@@ -295,6 +325,15 @@ const pvpBattleManager = {
       const { battleId, side, event, payload } = data;
       const room = battles.get(battleId);
       if (!room) return;
+
+      // Track boss faint switches — reveals new pokemon slot
+      if (side === 'boss' && event === 'faint_switch' && payload?.slotIndex !== undefined) {
+        if (room.revealBossSlot(payload.slotIndex)) {
+          const slots = room.getRevealedBossSlots();
+          io.to('gym').emit('GYM_BOSS_REVEAL', { battleId, revealedSlots: slots });
+          if (onBossReveal) onBossReveal(battleId, slots);
+        }
+      }
 
       // Relay to opponent
       const targetSid = side === 'boss' ? room.challengerSid : room.bossSid;
@@ -321,6 +360,7 @@ const pvpBattleManager = {
             winner,
           });
           console.log(`${PREFIX} ${side} disconnected from battle ${room.battleId}`);
+          if (onBattleEnd) onBattleEnd(room.battleId, winner, 'opponent_disconnected');
         }
       }
     });

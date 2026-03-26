@@ -55,16 +55,56 @@ function categorizeTrainer(waveIndex, isFixed, isBoss, isCustomInserted) {
 }
 
 // --- Budget ---
-function getCustomBudget(wave) {
-  if (wave <= 20) return 6;
-  if (wave <= 50) return 10;
-  if (wave <= 100) return 15;
-  if (wave <= 150) return 20;
-  return 25;
+function getCustomBudget(wave, session) {
+  const tiers = (session?.config?.budgetTiers) || defaultConfig.budgetTiers;
+  if (tiers && tiers.length > 0) {
+    for (const tier of tiers) {
+      if (wave <= tier.maxWave) return tier.budget;
+    }
+    return tiers[tiers.length - 1].budget;
+  }
+  // Hardcoded Fallback
+  if (wave <= 10) return 6;
+  if (wave <= 30) return 10;
+  if (wave <= 50) return 16;
+  if (wave <= 80) return 22;
+  if (wave <= 120) return 30;
+  if (wave <= 160) return 38;
+  return 48;
 }
 
 function getCustomPartySize(budget) {
   return Math.min(6, Math.ceil(budget / 4));
+}
+
+function generateRandomParty(budget) {
+  const maxSlots = getCustomPartySize(budget);
+  const ids = Object.keys(pokemonData);
+  const party = [];
+  let remaining = budget;
+
+  // Shuffle IDs
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+
+  for (const id of ids) {
+    if (party.length >= maxSlots) break;
+    const data = pokemonData[id];
+    if (!data || data.cost > remaining) continue;
+    party.push({
+      speciesId: parseInt(id),
+      name: data.name_de || data.name || 'Unknown',
+      cost: data.cost,
+      shiny: false,
+      nickname: null,
+      nicknameBy: null,
+    });
+    remaining -= data.cost;
+  }
+
+  return party;
 }
 
 function validateBudget(originalBudget, newParty) {
@@ -261,7 +301,7 @@ function registerTrainer(sessionId, trainerData) {
   const category = categorizeTrainer(waveIndex, isFixed, isBoss, false);
   const calcBudget = calculateTeamBudget(originalParty || []);
   // Use wave-based budget as fallback when originalParty is empty (pre-registered trainers)
-  const budget = calcBudget > 0 ? calcBudget : getCustomBudget(waveIndex);
+  const budget = calcBudget > 0 ? calcBudget : getCustomBudget(waveIndex, session);
   const trigger = session.config.categoryTriggers[category] || { type: 'free', amount: 0 };
 
   // Preserve claim data if trainer already exists (from prescan)
@@ -387,6 +427,13 @@ function claimTrainer(sessionId, waveIndex, twitchUserId, displayName, anonymous
     }));
   }
 
+  // Fallback: if no party, generate a random team within budget
+  if (!trainer.customParty || trainer.customParty.length === 0) {
+    const budget = trainer.budget || getCustomBudget(waveIndex, session);
+    trainer.customParty = generateRandomParty(budget);
+    console.log(`[Chat] Generated random fallback team for wave ${waveIndex} (budget: ${budget})`);
+  }
+
   const userClaims = session.trainerClaims.get(twitchUserId) || [];
   userClaims.push({ waveIndex, displayName, claimedAt: Date.now() });
   session.trainerClaims.set(twitchUserId, userClaims);
@@ -447,7 +494,7 @@ function editTeam(sessionId, waveIndex, twitchUserId, newParty) {
   }
 
   // Validate party size
-  const expectedSize = trainer.originalParty?.length || getCustomPartySize(trainer.budget || getCustomBudget(waveIndex));
+  const expectedSize = trainer.originalParty?.length || getCustomPartySize(trainer.budget || getCustomBudget(waveIndex, session));
   if (newParty.length < 1 || newParty.length > expectedSize) {
     return { success: false, error: `Team muss 1-${expectedSize} Pokemon haben` };
   }
@@ -501,8 +548,8 @@ function changeSprite(sessionId, waveIndex, twitchUserId, spriteKey) {
     return { success: false, error: 'Zu nah! Kann nicht mehr bearbeitet werden' };
   }
 
-  trainer.customSprite = spriteKey;
-  console.log(`[Chat] Sprite changed for wave ${waveIndex}: ${spriteKey}`);
+  trainer.customSprite = spriteKey || 'youngster';
+  console.log(`[Chat] Sprite changed for wave ${waveIndex}: ${trainer.customSprite}`);
   return { success: true, spriteKey };
 }
 
@@ -600,7 +647,7 @@ function insertCustomTrainer(sessionId, waveIndex, twitchUserId, displayName, sp
     }
   }
 
-  const budget = getCustomBudget(waveIndex);
+  const budget = getCustomBudget(waveIndex, session);
   const maxPartySize = getCustomPartySize(budget);
 
   if (party.length > maxPartySize) {
@@ -634,7 +681,7 @@ function insertCustomTrainer(sessionId, waveIndex, twitchUserId, displayName, sp
     budget,
     claimedBy: twitchUserId,
     claimedByName: displayName,
-    customSprite: spriteKey || null,
+    customSprite: spriteKey || 'youngster',
     customParty: party.map(p => ({
       speciesId: p.speciesId,
       name: pokemonData[String(p.speciesId)]?.name_de || pokemonData[String(p.speciesId)]?.name || 'Unknown',

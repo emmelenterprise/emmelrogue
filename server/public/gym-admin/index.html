@@ -63,9 +63,10 @@
         </div>
         <div id="boss-team" class="team-grid"></div>
         <div class="pokemon-search">
-          <input type="text" id="boss-search" placeholder="Pokemon suchen..." autocomplete="off">
+          <input type="text" id="boss-search" placeholder="Pokemon suchen oder durchs Grid scrollen..." autocomplete="off">
           <div id="boss-search-results" class="search-results"></div>
         </div>
+        <div id="boss-pokemon-grid" style="max-height:350px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:4px;margin:8px 0;padding:4px;border:1px solid var(--border,#333);border-radius:8px;background:rgba(0,0,0,0.2);"></div>
         <div class="sprite-picker">
           <h3>Boss Sprite</h3>
           <div class="sprite-picker-current" id="boss-sprite-current" onclick="toggleSpriteGrid('boss')">

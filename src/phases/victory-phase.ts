@@ -43,14 +43,29 @@ export class VictoryPhase extends PokemonPhase {
         .getEnemyParty()
         .find(p => (globalScene.currentBattle.battleType === BattleType.WILD ? p.isOnField() : !p?.isFainted(true)))
     ) {
-      // PvP: battle won — report result and redirect to lobby
+      // PvP: battle won
       if (pvpBattle.isPvpActive()) {
+        const side = pvpBattle.getSide();
         pvpBattle.reportResult("win");
+        pvpBattle.endBattle();
+
+        if (side === "challenger") {
+          // Challenger won against the Gym Leader — redirect to result page
+          globalScene.phaseManager.clearPhaseQueue();
+          globalScene.ui.showText("Du hast den Arenaleiter besiegt! Badge verdient!", null, () => {
+            globalScene.time.delayedCall(3000, () => {
+              window.location.href = "/gym-challenger/?result=win";
+            });
+          });
+          this.end();
+          return;
+        }
+
+        // Boss (Streamer) won — back to admin to start next battle
         globalScene.phaseManager.clearPhaseQueue();
-        globalScene.ui.showText("PvP-Kampf gewonnen!", null, () => {
+        globalScene.ui.showText("PvP-Kampf gewonnen! Zurueck zur Arena-Lobby...", null, () => {
           globalScene.time.delayedCall(2000, () => {
-            pvpBattle.endBattle();
-            window.location.href = "/lobby/";
+            window.location.href = "/gym-admin/";
           });
         });
         this.end();

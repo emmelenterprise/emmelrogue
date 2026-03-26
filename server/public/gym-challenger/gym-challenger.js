@@ -17,6 +17,8 @@ const TWITCH_SCOPES = 'user:read:subscriptions';
 let currentUser = null;
 let pokemonData = {};
 let trainerSprites = [];
+let moveData = {};
+let learnsets = {};
 let gymState = { active: false };
 let inQueue = false;
 
@@ -31,12 +33,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadUser();
 
   try {
-    const [pdRes, spRes] = await Promise.all([
+    const [pdRes, spRes, mdRes, lsRes] = await Promise.all([
       fetch('/api/pokemon-data'),
       fetch('/api/trainer-sprites'),
+      fetch('/api/move-data'),
+      fetch('/api/pokemon-learnsets'),
     ]);
     pokemonData = await pdRes.json();
     trainerSprites = await spRes.json();
+    moveData = await mdRes.json();
+    learnsets = await lsRes.json();
     populateSpriteSelect();
   } catch (e) {
     console.error('Failed to load data:', e);
@@ -166,7 +172,7 @@ function updateJoinButtons() {
 }
 
 // --- Sprite Select ---
-let selectedMySprite = 'youngster';
+let selectedMySprite = 'youngster_m';
 
 function populateSpriteSelect() {
   renderSpriteGrid('my');
@@ -243,7 +249,10 @@ function setupSearch() {
   const input = document.getElementById('pokemon-search');
   const results = document.getElementById('search-results');
 
+  renderChallengerGrid();
+
   input.addEventListener('input', () => {
+    renderChallengerGrid(input.value);
     const q = input.value.trim().toLowerCase();
     if (q.length < 2) { results.classList.remove('show'); return; }
     const matches = [];
@@ -307,12 +316,127 @@ function renderSearchResults(matches, container) {
   container.classList.add('show');
 }
 
+// --- Move Editor ---
+function getDefaultMoves(speciesId) {
+  const ls = learnsets[speciesId];
+  if (!ls || !ls.level) return [null, null, null, null];
+  const sorted = [...ls.level].sort((a, b) => b[0] - a[0]);
+  const seen = new Set();
+  const top = [];
+  for (const [, moveId] of sorted) {
+    if (!seen.has(moveId)) {
+      seen.add(moveId);
+      top.push(moveId);
+      if (top.length >= 4) break;
+    }
+  }
+  while (top.length < 4) top.push(null);
+  return top;
+}
+
+function getLearnableMoves(speciesId) {
+  const ls = learnsets[speciesId];
+  if (!ls) return [];
+  const moves = [];
+  const seen = new Set();
+  if (ls.level) {
+    for (const [level, moveId] of ls.level) {
+      if (!seen.has(moveId) && moveData[moveId]) {
+        seen.add(moveId);
+        moves.push({ id: moveId, ...moveData[moveId], source: 'level', level });
+      }
+    }
+  }
+  if (ls.egg) {
+    for (const moveId of ls.egg) {
+      if (!seen.has(moveId) && moveData[moveId]) {
+        seen.add(moveId);
+        moves.push({ id: moveId, ...moveData[moveId], source: 'egg' });
+      }
+    }
+  }
+  // TM moves
+  if (ls.tm) {
+    for (const moveId of ls.tm) {
+      if (!seen.has(moveId) && moveData[moveId]) {
+        seen.add(moveId);
+        moves.push({ id: moveId, ...moveData[moveId], source: 'tm' });
+      }
+    }
+  }
+  return moves;
+}
+
+let activeMoveDropdown = null;
+
+function openMoveSearch(pokemonIdx, moveIdx, input) {
+  closeAllMoveDropdowns();
+  input.select();
+  filterMoves(pokemonIdx, moveIdx, input);
+}
+
+function filterMoves(pokemonIdx, moveIdx, input) {
+  const query = input.value.toLowerCase().trim();
+  const resultsDiv = document.getElementById(`move-results-${pokemonIdx}-${moveIdx}`);
+  if (!resultsDiv) return;
+  const p = myTeam[pokemonIdx];
+  if (!p) return;
+  const learnable = getLearnableMoves(p.speciesId);
+  const matches = query.length < 1
+    ? learnable.slice(0, 30)
+    : learnable.filter(m => m.name.toLowerCase().includes(query) || m.name_en.toLowerCase().includes(query)).slice(0, 20);
+  if (matches.length === 0) {
+    resultsDiv.innerHTML = '<div class="move-no-results">Keine Treffer</div>';
+    resultsDiv.classList.add('show');
+    return;
+  }
+  resultsDiv.innerHTML = '';
+  for (const m of matches) {
+    const div = document.createElement('div');
+    div.className = 'move-result-item' + (m.source === 'egg' ? ' egg-move' : m.source === 'tm' ? ' tm-move' : '');
+    const tag = m.source === 'egg' ? ' <span class="egg-tag">EGG</span>' : m.source === 'tm' ? ' <span class="tm-tag">TM</span>' : '';
+    div.innerHTML = `${m.name} <span class="move-en">(${m.name_en})</span>${tag}`;
+    div.addEventListener('click', () => selectMove(pokemonIdx, moveIdx, m.id, m.name));
+    resultsDiv.appendChild(div);
+  }
+  resultsDiv.classList.add('show');
+  activeMoveDropdown = resultsDiv;
+}
+
+function selectMove(pokemonIdx, moveIdx, moveId, moveName) {
+  const p = myTeam[pokemonIdx];
+  if (!p) return;
+  if (!p.moves) p.moves = [null, null, null, null];
+  p.moves[moveIdx] = moveId;
+  closeAllMoveDropdowns();
+  renderMyTeam();
+}
+
+function clearMove(pokemonIdx, moveIdx) {
+  const p = myTeam[pokemonIdx];
+  if (!p || !p.moves) return;
+  p.moves[moveIdx] = null;
+  renderMyTeam();
+}
+
+function closeAllMoveDropdowns() {
+  document.querySelectorAll('.move-results.show').forEach(el => el.classList.remove('show'));
+  activeMoveDropdown = null;
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.move-slot')) {
+    closeAllMoveDropdowns();
+  }
+});
+
 // --- Team Builder ---
 function addToTeam(pokemon, formIndex, formName) {
   const role = getUserRole();
   const maxPokemon = gymState.config?.maxPokemonByRole?.[role] || gymState.config?.maxPokemonByRole?.everyone || 3;
   if (myTeam.length >= maxPokemon) return;
-  const entry = { speciesId: pokemon.speciesId, name: pokemon.name, cost: pokemon.cost, shiny: false, variant: 0 };
+  const defaultMoves = getDefaultMoves(pokemon.speciesId);
+  const entry = { speciesId: pokemon.speciesId, name: pokemon.name, cost: pokemon.cost, shiny: false, variant: 0, moves: defaultMoves };
   if (formIndex !== undefined && formIndex > 0) {
     entry.formIndex = formIndex;
     entry.formName = formName || '';
@@ -412,6 +536,30 @@ function renderMyTeam() {
     slot.addEventListener('dragend', onDragEnd);
     slot.addEventListener('dragover', (e) => onDragOver(e, i));
     slot.addEventListener('drop', (e) => onDrop(e, i));
+    // Build move slots HTML
+    const moves = p.moves || [null, null, null, null];
+    const ls = learnsets[p.speciesId];
+    const eggMoveIds = new Set(ls?.egg || []);
+    const tmMoveIds = new Set(ls?.tm || []);
+    let moveSlotsHtml = '<div class="move-slots">';
+    for (let m = 0; m < 4; m++) {
+      const move = moves[m];
+      const moveName = move ? (moveData[move]?.name || moveData[move]?.name_en || `Move #${move}`) : '';
+      const isEgg = move && eggMoveIds.has(move);
+      const isTm = move && !isEgg && tmMoveIds.has(move);
+      const inputClass = 'move-input' + (isEgg ? ' is-egg' : isTm ? ' is-tm' : '');
+      moveSlotsHtml += `
+        <div class="move-slot" data-pokemon="${i}" data-move-index="${m}">
+          <input type="text" class="${inputClass}" placeholder="Attacke ${m + 1}" value="${moveName}"
+                 onfocus="openMoveSearch(${i}, ${m}, this)"
+                 oninput="filterMoves(${i}, ${m}, this)">
+          ${move ? `<button class="move-clear" onclick="clearMove(${i}, ${m})">&times;</button>` : ''}
+          <div class="move-results" id="move-results-${i}-${m}"></div>
+        </div>
+      `;
+    }
+    moveSlotsHtml += '</div>';
+
     slot.innerHTML = `
       <button class="remove" onclick="removeFromTeam(${i})">&times;</button>
       <img src="${getIconPath(p.speciesId)}" alt="${p.name}" onerror="this.style.display='none'">
@@ -421,6 +569,7 @@ function renderMyTeam() {
       <button class="shiny-toggle" onclick="toggleShiny(${i})" style="color:${shinyColors[shinyState]}" title="Shiny umschalten">
         &#10022; ${shinyLabels[shinyState] || 'Normal'}
       </button>
+      ${moveSlotsHtml}
     `;
     container.appendChild(slot);
   }
@@ -517,7 +666,8 @@ function joinQueue() {
     victory: document.getElementById('line-victory').value.trim(),
     defeat: document.getElementById('line-defeat').value.trim(),
   };
-  const spriteKey = document.getElementById('my-sprite').value;
+  const spriteKey = document.getElementById('my-sprite').value || 'youngster_m';
+  saveChallengerTeam();
 
   const token = localStorage.getItem('twitch_community_token');
   socket.emit('GYM_JOIN_QUEUE', {
@@ -528,6 +678,7 @@ function joinQueue() {
       const entry = { speciesId: p.speciesId };
       if (p.formIndex) entry.formIndex = p.formIndex;
       if (p.shiny) { entry.shiny = true; entry.variant = p.variant || 0; }
+      if (p.moves) entry.moves = [...p.moves];
       return entry;
     }),
     trainerLines,
@@ -644,4 +795,121 @@ function renderLeaderboard() {
     `;
     lbDiv.appendChild(div);
   });
+}
+
+// --- Pokemon Grid ---
+let challGridCache = null;
+const CHALL_LAST_TEAM_KEY = 'emmelrogue_gym_challenger_last_team';
+
+function renderChallengerGrid(filter) {
+  const grid = document.getElementById('challenger-pokemon-grid');
+  if (!grid) return;
+
+  if (!challGridCache) {
+    challGridCache = [];
+    for (const [id, data] of Object.entries(pokemonData)) {
+      challGridCache.push({
+        id: parseInt(id),
+        name: data.name_de || data.name,
+        nameEn: data.name,
+        cost: data.cost,
+        gen: data.generation || 1,
+      });
+    }
+    challGridCache.sort((a, b) => a.id - b.id);
+  }
+
+  const query = (filter || '').toLowerCase().trim();
+  const filtered = query.length >= 2
+    ? challGridCache.filter(p => p.name.toLowerCase().includes(query) || p.nameEn.toLowerCase().includes(query))
+    : challGridCache;
+
+  const role = getUserRole();
+  const budget = gymState.config?.budgetByRole?.[role] || gymState.config?.budgetByRole?.everyone || 10;
+  const maxPoke = gymState.config?.maxPokemonByRole?.[role] || gymState.config?.maxPokemonByRole?.everyone || 3;
+  const usedBudget = myTeam.reduce((sum, p) => sum + p.cost, 0);
+  const remainingBudget = budget - usedBudget;
+  const teamFull = myTeam.length >= maxPoke;
+
+  grid.innerHTML = '';
+  for (const p of filtered) {
+    const cell = document.createElement('div');
+    const isInTeam = myTeam.some(tp => tp.speciesId === p.id);
+    const tooExpensive = !isInTeam && (p.cost > remainingBudget || teamFull);
+    cell.style.cssText = `
+      display:flex;flex-direction:column;align-items:center;padding:4px;
+      border-radius:6px;cursor:${tooExpensive ? 'not-allowed' : 'pointer'};
+      border:1px solid ${isInTeam ? 'var(--accent,#7c3aed)' : 'transparent'};
+      background:${isInTeam ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)'};
+      opacity:${tooExpensive ? '0.3' : '1'};
+      transition:all 0.15s;font-size:0.65rem;text-align:center;
+    `;
+    cell.innerHTML = `
+      <img src="${getIconPath(p.id)}" alt="" style="width:32px;height:32px;image-rendering:pixelated;" onerror="this.style.display='none'" loading="lazy">
+      <span style="color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65px;">${p.name}</span>
+      <span style="color:${p.cost >= 8 ? '#ef4444' : p.cost >= 5 ? '#eab308' : '#22c55e'};font-weight:bold;">${p.cost}</span>
+    `;
+    if (!tooExpensive) {
+      cell.addEventListener('mouseenter', () => { if (!isInTeam) cell.style.background = 'rgba(255,255,255,0.08)'; });
+      cell.addEventListener('mouseleave', () => { if (!isInTeam) cell.style.background = 'rgba(255,255,255,0.03)'; });
+      cell.addEventListener('click', () => {
+        if (isInTeam) {
+          const idx = myTeam.findIndex(tp => tp.speciesId === p.id);
+          if (idx >= 0) { myTeam.splice(idx, 1); renderMyTeam(); renderChallengerGrid(query); }
+        } else {
+          addToTeam({ speciesId: p.id, name: p.name, cost: p.cost });
+          renderChallengerGrid(query);
+        }
+      });
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function randomChallengerTeam() {
+  if (!challGridCache) renderChallengerGrid();
+  myTeam = [];
+  const role = getUserRole();
+  const budget = gymState.config?.budgetByRole?.[role] || gymState.config?.budgetByRole?.everyone || 10;
+  const maxPoke = gymState.config?.maxPokemonByRole?.[role] || gymState.config?.maxPokemonByRole?.everyone || 3;
+  let remaining = budget;
+  let filled = 0;
+  const shuffled = [...challGridCache].sort(() => Math.random() - 0.5);
+  for (const p of shuffled) {
+    if (filled >= maxPoke) break;
+    if (p.cost > remaining) continue;
+    myTeam.push({ speciesId: p.id, name: p.name, cost: p.cost, shiny: false, variant: 0, moves: getDefaultMoves(p.id) });
+    remaining -= p.cost;
+    filled++;
+  }
+  renderMyTeam();
+  renderChallengerGrid(document.getElementById('pokemon-search')?.value);
+}
+
+function loadLastChallengerTeam() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHALL_LAST_TEAM_KEY));
+    if (!Array.isArray(saved) || saved.length === 0) return alert('Kein gespeichertes Team');
+    myTeam = [];
+    const role = getUserRole();
+    const budget = gymState.config?.budgetByRole?.[role] || gymState.config?.budgetByRole?.everyone || 10;
+    const maxPoke = gymState.config?.maxPokemonByRole?.[role] || gymState.config?.maxPokemonByRole?.everyone || 3;
+    let totalCost = 0;
+    for (const p of saved) {
+      if (!p || !p.speciesId) continue;
+      const data = pokemonData[String(p.speciesId)];
+      if (!data) continue;
+      if (totalCost + data.cost > budget) continue;
+      if (myTeam.length >= maxPoke) break;
+      myTeam.push({ speciesId: p.speciesId, name: data.name_de || data.name, cost: data.cost, shiny: false, variant: 0, moves: p.moves || getDefaultMoves(p.speciesId) });
+      totalCost += data.cost;
+    }
+    renderMyTeam();
+    renderChallengerGrid(document.getElementById('pokemon-search')?.value);
+  } catch { alert('Kein gespeichertes Team'); }
+}
+
+// Save last team to localStorage when joining queue
+function saveChallengerTeam() {
+  try { localStorage.setItem(CHALL_LAST_TEAM_KEY, JSON.stringify(myTeam)); } catch {}
 }

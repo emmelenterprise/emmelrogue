@@ -429,6 +429,133 @@ export async function startStreaming(): Promise<void> {
   }, 30_000);
 }
 
+// ===== PvP Camera Support =====
+// Lightweight cam-only streaming for gym PvP battles.
+// Uses the same SIGNAL signaling with battleId as room code.
+
+let pvpCamActive = false;
+let pvpBattleIdRtc: string | null = null;
+
+/** Start PvP webcam streaming (challenger side) */
+export async function startPvpCam(battleId: string): Promise<void> {
+  if (pvpCamActive) return;
+  pvpCamActive = true;
+  pvpBattleIdRtc = battleId;
+
+  await fetchIceServers();
+
+  // Capture webcam only (no game canvas needed for overlay cam slot)
+  try {
+    localStreams.cam = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
+      audio: false,
+    });
+  } catch {
+    console.log(`${PREFIX} PvP cam: no camera available`);
+    localStreams.cam = null;
+  }
+
+  if (!localStreams.cam) {
+    pvpCamActive = false;
+    return;
+  }
+
+  console.log(`${PREFIX} PvP cam ready for battle ${battleId}`);
+
+  const socket = getSocket();
+  if (!socket) return;
+
+  myId = "pvp-challenger";
+  socket.emit("REGISTER_WEBRTC", { role: "pvp-cam", id: myId, raceCode: battleId });
+
+  // Handle signals from gym-overlay (it creates offers, we answer)
+  socket.on("SIGNAL", (payload: { fromRole: string; fromId: string; data: any }) => {
+    if (!pvpCamActive) return;
+    const { fromRole, fromId, data } = payload;
+
+    if (fromRole === "gym-overlay") {
+      if (data.type === "offer") {
+        handlePvpCamOffer(fromId, data.sdp);
+      } else if (data.type === "ice-candidate") {
+        handleIceCandidate(fromId, data.candidate);
+      }
+    }
+  });
+}
+
+/** Handle offer from gym-overlay (send cam stream) */
+async function handlePvpCamOffer(fromId: string, offer: RTCSessionDescriptionInit): Promise<void> {
+  const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 10 });
+
+  // Send cam only
+  if (localStreams.cam) {
+    for (const track of localStreams.cam.getTracks()) {
+      pc.addTrack(track, localStreams.cam);
+    }
+  }
+
+  preferH264(pc);
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      const socket = getSocket();
+      if (socket) {
+        socket.emit("SIGNAL", {
+          targetRole: "gym-overlay",
+          targetId: fromId,
+          signalData: { type: "ice-candidate", candidate: event.candidate },
+        });
+      }
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log(`${PREFIX} PvP cam ICE: ${pc.iceConnectionState}`);
+  };
+
+  peers.set(fromId, { pc, peerId: fromId, targetRole: "gym-overlay" });
+
+  await pc.setRemoteDescription(offer);
+
+  const buffered = iceCandidateBuffer.get(fromId) || [];
+  for (const c of buffered) await pc.addIceCandidate(c);
+  iceCandidateBuffer.delete(fromId);
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  await applyBandwidthLimits(pc);
+
+  const socket = getSocket();
+  if (socket) {
+    socket.emit("SIGNAL", {
+      targetRole: "gym-overlay",
+      targetId: fromId,
+      signalData: { type: "answer", sdp: answer },
+    });
+  }
+}
+
+/** Stop PvP cam streaming */
+export function stopPvpCam(): void {
+  if (!pvpCamActive) return;
+  pvpCamActive = false;
+  pvpBattleIdRtc = null;
+
+  if (localStreams.cam) {
+    localStreams.cam.getTracks().forEach((t) => t.stop());
+    localStreams.cam = null;
+  }
+
+  for (const [key, peerData] of peers) {
+    if (peerData.targetRole === "gym-overlay") {
+      peerData.pc.close();
+      peers.delete(key);
+    }
+  }
+  console.log(`${PREFIX} PvP cam stopped`);
+}
+
 /** Stop all streams and close connections */
 export function stopStreaming(): void {
   for (const [, peerData] of peers) {

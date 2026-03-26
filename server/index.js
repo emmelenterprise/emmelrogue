@@ -209,6 +209,18 @@ app.get('/api/pokemon-data', (req, res) => {
   res.json(chatFeature.pokemonData);
 });
 
+// GET /api/move-data — move names for gym admin moveset editor
+const moveData = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'move-data.json'), 'utf-8'));
+app.get('/api/move-data', (_req, res) => {
+  res.json(moveData);
+});
+
+// GET /api/pokemon-learnsets — level-up + egg moves per species
+const pokemonLearnsets = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'pokemon-learnsets.json'), 'utf-8'));
+app.get('/api/pokemon-learnsets', (_req, res) => {
+  res.json(pokemonLearnsets);
+});
+
 // GET /api/trainer-sprites — available trainer sprites (scanned from filesystem + atlas frame data)
 let cachedTrainerSprites = null;
 function loadTrainerSprites() {
@@ -1334,7 +1346,7 @@ io.on('connection', (socket) => {
         existing.hostSocketId = socket.id;
         socket.data.chatSessionId = existing.sessionId;
         socket.join(`chat:${existing.sessionId}`);
-        socket.emit('CHAT_SESSION_STARTED', { sessionId: existing.sessionId, code: existing.code });
+        socket.emit('CHAT_SESSION_STARTED', { sessionId: existing.sessionId, code: existing.code, fixedTrainerOverrides: existing.config?.fixedTrainerOverrides || null });
         // Send all existing customizations (claimed/inserted trainers) to game client
         const customs = chatFeature.getAllCustomizations(existing.sessionId);
         for (const c of customs) {
@@ -1350,7 +1362,7 @@ io.on('connection', (socket) => {
     if (session) session.hostSocketId = socket.id;
     socket.data.chatSessionId = sessionId;
     socket.join(`chat:${sessionId}`);
-    socket.emit('CHAT_SESSION_STARTED', { sessionId, code: session.code });
+    socket.emit('CHAT_SESSION_STARTED', { sessionId, code: session.code, fixedTrainerOverrides: session.config?.fixedTrainerOverrides || null });
     // Notify any waiting community pages
     io.emit('CHAT_SESSION_AVAILABLE', { sessionId: session.sessionId, code: session.code });
     console.log(`[Chat] Session started: ${sessionId} code=${session.code} by ${socket.id}`);
@@ -1365,7 +1377,7 @@ io.on('connection', (socket) => {
     if (match) {
       socket.data.chatSessionId = match.sessionId;
       socket.join(`chat:${match.sessionId}`);
-      socket.emit('CHAT_SESSION_STARTED', { sessionId: match.sessionId });
+      socket.emit('CHAT_SESSION_STARTED', { sessionId: match.sessionId, fixedTrainerOverrides: match.config?.fixedTrainerOverrides || null });
       // Send all existing customizations to P2
       const customs = chatFeature.getAllCustomizations(match.sessionId);
       for (const c of customs) {
@@ -1731,6 +1743,12 @@ io.on('connection', (socket) => {
   socket.on('GYM_AWARD_BADGE', ({ twitchId, challengerId, challengerName }) => {
     if (twitchId !== '647322993') return;
     const result = gymLeader.awardBadge(challengerId, challengerName);
+    // Clear battle state
+    const session = gymLeader.getSession();
+    if (session) {
+      session.activeBattleId = null;
+      session.revealedBossSlots = [];
+    }
     io.to('gym').emit('GYM_STATE', gymLeader.getState());
     io.to('gym').emit('GYM_BADGE_AWARDED', { twitchId: challengerId, displayName: challengerName, totalBadges: result.totalBadges });
   });
@@ -1738,11 +1756,47 @@ io.on('connection', (socket) => {
   socket.on('GYM_RECORD_LOSS', ({ twitchId, challengerId, challengerName }) => {
     if (twitchId !== '647322993') return;
     gymLeader.recordLoss(challengerId, challengerName);
+    // Clear battle state
+    const session = gymLeader.getSession();
+    if (session) {
+      session.activeBattleId = null;
+      session.revealedBossSlots = [];
+    }
     io.to('gym').emit('GYM_STATE', gymLeader.getState());
   });
 
   // --- PvP Battle Events ---
-  pvpBattleManager.setupSocketHandlers(io, socket);
+  pvpBattleManager.setupSocketHandlers(io, socket, (battleId, revealedSlots) => {
+    // onBossReveal
+    const session = gymLeader.getSession();
+    if (session && session.activeBattleId === battleId) {
+      session.revealedBossSlots = revealedSlots;
+    }
+  }, (battleId, winner, reason) => {
+    // onBattleEnd — automatically advance gym queue
+    const session = gymLeader.getSession();
+    if (!session || session.activeBattleId !== battleId) return;
+    const challenger = session.currentChallenger;
+    if (!challenger) return;
+
+    console.log(`[Gym] Auto-processing battle result: ${winner} won (${reason})`);
+
+    if (winner === 'challenger') {
+      const result = gymLeader.awardBadge(challenger.twitchId, challenger.displayName);
+      io.to('gym').emit('GYM_BADGE_AWARDED', {
+        twitchId: challenger.twitchId,
+        displayName: challenger.displayName,
+        totalBadges: result.totalBadges,
+      });
+    } else {
+      gymLeader.recordLoss(challenger.twitchId, challenger.displayName);
+    }
+
+    // Clear battle state
+    session.activeBattleId = null;
+    session.revealedBossSlots = [];
+    io.to('gym').emit('GYM_STATE', gymLeader.getState());
+  });
 
   // Gym: Start PvP battle (admin triggers when challenger is ready)
   socket.on('GYM_START_BATTLE', ({ twitchId }) => {
@@ -1771,6 +1825,7 @@ io.on('connection', (socket) => {
 
     // Store battle ID in gym session
     session.activeBattleId = room.battleId;
+    session.revealedBossSlots = [0]; // Lead pokemon always revealed
 
     // Broadcast battle info to gym room
     io.to('gym').emit('GYM_BATTLE_CREATED', {

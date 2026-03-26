@@ -1,4 +1,5 @@
 import { globalScene } from "#app/global-scene";
+import { raceManager } from "#app/emmelrogue/race-manager";
 import { ChallengeType } from "#enums/challenge-type";
 import { BattlePhase } from "#phases/battle-phase";
 import { applyChallenges } from "#utils/challenge-utils";
@@ -24,6 +25,19 @@ export class PartyHealPhase extends BattlePhase {
     globalScene.ui.fadeOut(1000).then(() => {
       const preventRevive = new BooleanHolder(false);
       applyChallenges(ChallengeType.PREVENT_REVIVE, preventRevive);
+
+      // EmmelRogue Nuzlocke: Tote Pokemon ZUERST entfernen, DANN heilen
+      const isNuzlocke = raceManager.isRaceMode() && raceManager.getNuzlockeDeath();
+      if (isNuzlocke) {
+        const party = globalScene.getPlayerParty();
+        for (let i = party.length - 1; i >= 0; i--) {
+          if (party[i].isFainted()) {
+            console.log(`[Nuzlocke] Removing fainted ${party[i].name} before heal (wave ${globalScene.currentBattle?.waveIndex})`);
+            party.splice(i, 1);
+          }
+        }
+      }
+
       for (const pokemon of globalScene.getPlayerParty()) {
         // Prevent reviving fainted pokemon during certain challenges
         if (pokemon.isFainted() && preventRevive.value) {

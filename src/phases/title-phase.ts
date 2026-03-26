@@ -2,6 +2,7 @@ import { pokerogueApi } from "#api/pokerogue-api";
 import { loggedInUser } from "#app/account";
 import { raceManager } from "#app/emmelrogue/race-manager";
 import { pvpBattle } from "#app/emmelrogue/pvp-battle";
+import { PokemonMove } from "#moves/pokemon-move";
 import { GameMode, getGameMode } from "#app/game-mode";
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
@@ -139,6 +140,13 @@ export class TitlePhase extends Phase {
           starterPokemon.setVisible(false);
           // Generate moveset (PlayerPokemon constructor leaves it empty unless isDaily)
           starterPokemon.generateAndPopulateMoveset();
+          // Override with custom moves if specified
+          if (p.moves && Array.isArray(p.moves)) {
+            const customMoves = p.moves.filter((m: number | null) => m !== null && m > 0);
+            if (customMoves.length > 0) {
+              starterPokemon.moveset = customMoves.map((moveId: number) => new PokemonMove(moveId));
+            }
+          }
           if (p.shiny) {
             starterPokemon.shiny = true;
             if (p.variant !== undefined) {

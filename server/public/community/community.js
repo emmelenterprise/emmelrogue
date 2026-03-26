@@ -524,10 +524,12 @@ function setupUI() {
   document.getElementById('btn-close-modal').addEventListener('click', closeTeamModal);
   document.getElementById('btn-cancel-team').addEventListener('click', closeTeamModal);
   document.getElementById('btn-save-team').addEventListener('click', saveTeam);
+  document.getElementById('btn-random-team').addEventListener('click', generateRandomTeam);
+  document.getElementById('btn-load-last-team').addEventListener('click', loadLastTeam);
 
-  // Pokemon search (team editor)
+  // Pokemon search (team editor) — also filters grid
   const searchInput = document.getElementById('pokemon-search');
-  searchInput.addEventListener('input', handlePokemonSearch);
+  searchInput.addEventListener('input', () => { handlePokemonSearch(); filterPokemonGrid(searchInput.value); });
   searchInput.addEventListener('focus', handlePokemonSearch);
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.pokemon-search')) {
@@ -552,8 +554,10 @@ function setupUI() {
   document.getElementById('btn-cancel-insert').addEventListener('click', closeInsertModal);
   document.getElementById('btn-save-insert').addEventListener('click', saveInsertTrainer);
   document.getElementById('insert-wave').addEventListener('input', onInsertWaveChange);
+  document.getElementById('btn-insert-random-team').addEventListener('click', generateInsertRandomTeam);
+  document.getElementById('btn-insert-load-last').addEventListener('click', loadInsertLastTeam);
   const insertSearch = document.getElementById('insert-pokemon-search');
-  insertSearch.addEventListener('input', handleInsertPokemonSearch);
+  insertSearch.addEventListener('input', () => { handleInsertPokemonSearch(); renderInsertPokemonGrid(insertSearch.value); });
   insertSearch.addEventListener('focus', handleInsertPokemonSearch);
 }
 
@@ -818,6 +822,7 @@ function openTeamEditor(trainer) {
   document.getElementById('modal-wave').textContent = editingWave;
   document.getElementById('budget-max').textContent = editBudget;
   renderPartySlots();
+  renderPokemonGrid();
   document.getElementById('team-modal').style.display = 'flex';
   document.getElementById('pokemon-search').value = '';
 }
@@ -951,6 +956,9 @@ function saveTeam() {
     return;
   }
 
+  // Save to localStorage for "Load Last Team"
+  saveLastTeam(party);
+
   socket.emit('COMMUNITY_EDIT_TEAM', {
     sessionId,
     wave: editingWave,
@@ -975,11 +983,22 @@ let insertMaxSlots = 0;
 let insertParty = [];
 
 function getInsertBudget(wave) {
-  if (wave <= 20) return 6;
-  if (wave <= 50) return 10;
-  if (wave <= 100) return 15;
-  if (wave <= 150) return 20;
-  return 25;
+  // Use budgetTiers from session config if available
+  const tiers = sessionConfig?.budgetTiers;
+  if (tiers && tiers.length > 0) {
+    for (const tier of tiers) {
+      if (wave <= tier.maxWave) return tier.budget;
+    }
+    return tiers[tiers.length - 1].budget;
+  }
+  // Fallback
+  if (wave <= 10) return 6;
+  if (wave <= 30) return 10;
+  if (wave <= 50) return 16;
+  if (wave <= 80) return 22;
+  if (wave <= 120) return 30;
+  if (wave <= 160) return 38;
+  return 48;
 }
 
 function getInsertMaxSlots(budget) {
@@ -1093,6 +1112,7 @@ function onInsertWaveChange() {
   document.getElementById('insert-budget-max').textContent = insertBudget;
 
   renderInsertPartySlots();
+  renderInsertPokemonGrid();
 }
 
 function renderInsertPartySlots() {
@@ -1633,4 +1653,266 @@ function showToast(message, isError = false) {
   toastTimeout = setTimeout(() => {
     toast.style.opacity = '0';
   }, 3000);
+}
+
+// --- Pokemon Grid (browsable) ---
+let pokemonGridCache = null;
+
+function renderPokemonGrid(filter) {
+  const grid = document.getElementById('pokemon-grid');
+  if (!grid) return;
+
+  // Build cache once
+  if (!pokemonGridCache) {
+    pokemonGridCache = [];
+    for (const [id, data] of Object.entries(pokemonData)) {
+      pokemonGridCache.push({
+        id: parseInt(id),
+        name: data.name_de || data.name,
+        nameEn: data.name,
+        cost: data.cost,
+        gen: data.generation || 1,
+      });
+    }
+    pokemonGridCache.sort((a, b) => a.id - b.id);
+  }
+
+  const query = (filter || '').toLowerCase().trim();
+  const filtered = query.length >= 2
+    ? pokemonGridCache.filter(p => p.name.toLowerCase().includes(query) || p.nameEn.toLowerCase().includes(query))
+    : pokemonGridCache;
+
+  // Calculate remaining budget
+  let usedBudget = 0;
+  for (const ep of editParty) { if (ep) usedBudget += ep.cost; }
+  const remainingBudget = editBudget - usedBudget;
+  const teamFull = editParty.filter(Boolean).length >= getEditMaxSlots();
+
+  grid.innerHTML = '';
+  for (const p of filtered) {
+    const cell = document.createElement('div');
+    const isInParty = editParty.some(ep => ep && ep.speciesId === p.id);
+    const tooExpensive = !isInParty && (p.cost > remainingBudget || teamFull);
+    cell.style.cssText = `
+      display:flex;flex-direction:column;align-items:center;padding:4px;
+      border-radius:6px;cursor:${tooExpensive ? 'not-allowed' : 'pointer'};
+      border:1px solid ${isInParty ? 'var(--accent,#7c3aed)' : 'transparent'};
+      background:${isInParty ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)'};
+      opacity:${tooExpensive ? '0.3' : '1'};
+      transition:all 0.15s;font-size:0.65rem;text-align:center;
+    `;
+    cell.innerHTML = `
+      <img src="${getIconPath(p.id)}" alt="" style="width:32px;height:32px;image-rendering:pixelated;" onerror="this.style.display='none'" loading="lazy">
+      <span style="color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65px;">${p.name}</span>
+      <span style="color:${p.cost >= 8 ? '#ef4444' : p.cost >= 5 ? '#eab308' : '#22c55e'};font-weight:bold;">${p.cost}</span>
+    `;
+    if (!tooExpensive) {
+      cell.addEventListener('mouseenter', () => { if (!isInParty) cell.style.background = 'rgba(255,255,255,0.08)'; });
+      cell.addEventListener('mouseleave', () => { if (!isInParty) cell.style.background = 'rgba(255,255,255,0.03)'; });
+      cell.addEventListener('click', () => {
+        if (isInParty) {
+          const idx = editParty.findIndex(ep => ep && ep.speciesId === p.id);
+          if (idx >= 0) { editParty[idx] = null; renderPartySlots(); renderPokemonGrid(query); }
+        } else {
+          addPokemonToParty(p);
+          renderPokemonGrid(query);
+        }
+      });
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function filterPokemonGrid(query) {
+  renderPokemonGrid(query);
+}
+
+// --- Random Team Generator ---
+function generateRandomTeam() {
+  if (!pokemonGridCache) renderPokemonGrid(); // init cache
+  const budget = editBudget;
+  const maxSlots = getEditMaxSlots();
+
+  // Clear current team
+  editParty = new Array(maxSlots).fill(null);
+
+  let remainingBudget = budget;
+  let filled = 0;
+
+  // Shuffle pokemon list
+  const shuffled = [...pokemonGridCache].sort(() => Math.random() - 0.5);
+
+  for (const p of shuffled) {
+    if (filled >= maxSlots) break;
+    if (p.cost > remainingBudget) continue;
+
+    editParty[filled] = {
+      speciesId: p.id,
+      name: p.name,
+      cost: p.cost,
+      shiny: false,
+      nickname: null,
+    };
+    remainingBudget -= p.cost;
+    filled++;
+  }
+
+  renderPartySlots();
+  renderPokemonGrid(document.getElementById('pokemon-search')?.value);
+  showToast(`Random Team: ${filled} Pokemon, ${budget - remainingBudget}/${budget} Budget`);
+}
+
+// --- Last Team (LocalStorage) ---
+const LAST_TEAM_KEY = 'emmelrogue_last_team';
+
+function saveLastTeam(party) {
+  try {
+    localStorage.setItem(LAST_TEAM_KEY, JSON.stringify(party));
+  } catch {}
+}
+
+function loadLastTeam() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAST_TEAM_KEY));
+    if (!Array.isArray(saved) || saved.length === 0) {
+      showToast('Kein gespeichertes Team gefunden', true);
+      return;
+    }
+
+    const maxSlots = getEditMaxSlots();
+    editParty = new Array(maxSlots).fill(null);
+
+    let totalCost = 0;
+    for (let i = 0; i < Math.min(saved.length, maxSlots); i++) {
+      const p = saved[i];
+      if (!p || !p.speciesId) continue;
+      const data = pokemonData[String(p.speciesId)];
+      if (!data) continue;
+      const cost = data.cost || 0;
+      if (totalCost + cost > editBudget) continue;
+      editParty[i] = {
+        speciesId: p.speciesId,
+        name: data.name_de || data.name || p.name,
+        cost: cost,
+        shiny: p.shiny || false,
+        nickname: p.nickname || null,
+      };
+      totalCost += cost;
+    }
+
+    renderPartySlots();
+    renderPokemonGrid(document.getElementById('pokemon-search')?.value);
+    showToast('Letztes Team geladen');
+  } catch {
+    showToast('Kein gespeichertes Team gefunden', true);
+  }
+}
+
+// --- Insert Modal: Pokemon Grid, Random, Last Team ---
+
+function renderInsertPokemonGrid(filter) {
+  const grid = document.getElementById('insert-pokemon-grid');
+  if (!grid) return;
+  if (!pokemonGridCache) renderPokemonGrid(); // init cache
+
+  const query = (filter || '').toLowerCase().trim();
+  const filtered = query.length >= 2
+    ? pokemonGridCache.filter(p => p.name.toLowerCase().includes(query) || p.nameEn.toLowerCase().includes(query))
+    : pokemonGridCache;
+
+  let usedBudget = 0;
+  for (const ep of insertParty) { if (ep) usedBudget += ep.cost; }
+  const remainingBudget = insertBudget - usedBudget;
+  const teamFull = insertParty.filter(Boolean).length >= insertMaxSlots;
+
+  grid.innerHTML = '';
+  for (const p of filtered) {
+    const cell = document.createElement('div');
+    const isInParty = insertParty.some(ep => ep && ep.speciesId === p.id);
+    const tooExpensive = !isInParty && (p.cost > remainingBudget || teamFull);
+    cell.style.cssText = `
+      display:flex;flex-direction:column;align-items:center;padding:4px;
+      border-radius:6px;cursor:${tooExpensive ? 'not-allowed' : 'pointer'};
+      border:1px solid ${isInParty ? 'var(--accent,#7c3aed)' : 'transparent'};
+      background:${isInParty ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)'};
+      opacity:${tooExpensive ? '0.3' : '1'};
+      transition:all 0.15s;font-size:0.65rem;text-align:center;
+    `;
+    cell.innerHTML = `
+      <img src="${getIconPath(p.id)}" alt="" style="width:32px;height:32px;image-rendering:pixelated;" onerror="this.style.display='none'" loading="lazy">
+      <span style="color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65px;">${p.name}</span>
+      <span style="color:${p.cost >= 8 ? '#ef4444' : p.cost >= 5 ? '#eab308' : '#22c55e'};font-weight:bold;">${p.cost}</span>
+    `;
+    if (!tooExpensive) {
+      cell.addEventListener('mouseenter', () => { if (!isInParty) cell.style.background = 'rgba(255,255,255,0.08)'; });
+      cell.addEventListener('mouseleave', () => { if (!isInParty) cell.style.background = 'rgba(255,255,255,0.03)'; });
+      cell.addEventListener('click', () => {
+        if (isInParty) {
+          const idx = insertParty.findIndex(ep => ep && ep.speciesId === p.id);
+          if (idx >= 0) { insertParty[idx] = null; renderInsertPartySlots(); renderInsertPokemonGrid(query); }
+        } else {
+          addInsertPokemonToParty(p);
+          renderInsertPokemonGrid(query);
+        }
+      });
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function addInsertPokemonToParty(pokemon) {
+  let emptyIdx = -1;
+  for (let i = 0; i < insertMaxSlots; i++) {
+    if (!insertParty[i]) { emptyIdx = i; break; }
+  }
+  if (emptyIdx === -1) { showToast('Team ist voll!', true); return; }
+  insertParty[emptyIdx] = {
+    speciesId: pokemon.id,
+    name: pokemon.name,
+    cost: pokemon.cost,
+    shiny: false,
+    nickname: null,
+  };
+  renderInsertPartySlots();
+}
+
+function generateInsertRandomTeam() {
+  if (!insertWave || !insertBudget) { showToast('Erst eine Welle eingeben', true); return; }
+  if (!pokemonGridCache) renderPokemonGrid();
+  insertParty = new Array(insertMaxSlots).fill(null);
+  let remaining = insertBudget;
+  let filled = 0;
+  const shuffled = [...pokemonGridCache].sort(() => Math.random() - 0.5);
+  for (const p of shuffled) {
+    if (filled >= insertMaxSlots) break;
+    if (p.cost > remaining) continue;
+    insertParty[filled] = { speciesId: p.id, name: p.name, cost: p.cost, shiny: false, nickname: null };
+    remaining -= p.cost;
+    filled++;
+  }
+  renderInsertPartySlots();
+  renderInsertPokemonGrid(document.getElementById('insert-pokemon-search')?.value);
+  showToast(`Random Team: ${filled} Pokemon, ${insertBudget - remaining}/${insertBudget} Budget`);
+}
+
+function loadInsertLastTeam() {
+  if (!insertWave || !insertBudget) { showToast('Erst eine Welle eingeben', true); return; }
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAST_TEAM_KEY));
+    if (!Array.isArray(saved) || saved.length === 0) { showToast('Kein gespeichertes Team', true); return; }
+    insertParty = new Array(insertMaxSlots).fill(null);
+    let totalCost = 0;
+    for (let i = 0; i < Math.min(saved.length, insertMaxSlots); i++) {
+      const p = saved[i];
+      if (!p || !p.speciesId) continue;
+      const data = pokemonData[String(p.speciesId)];
+      if (!data) continue;
+      if (totalCost + data.cost > insertBudget) continue;
+      insertParty[i] = { speciesId: p.speciesId, name: data.name_de || data.name, cost: data.cost, shiny: false, nickname: null };
+      totalCost += data.cost;
+    }
+    renderInsertPartySlots();
+    renderInsertPokemonGrid(document.getElementById('insert-pokemon-search')?.value);
+    showToast('Letztes Team geladen');
+  } catch { showToast('Kein gespeichertes Team', true); }
 }

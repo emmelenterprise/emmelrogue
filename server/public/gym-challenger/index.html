@@ -54,10 +54,15 @@
           </div>
           <div id="my-team" class="team-grid"></div>
           <button id="btn-import" class="btn btn-import" onclick="importCommunityTeam()" style="display:none">Community-Team importieren</button>
+          <div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;">
+            <button class="btn btn-accent" style="flex:1;min-width:120px;" onclick="randomChallengerTeam()">&#127922; Random</button>
+            <button class="btn" style="flex:1;min-width:120px;" onclick="loadLastChallengerTeam()">&#128190; Letztes Team</button>
+          </div>
           <div class="pokemon-search">
-            <input type="text" id="pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+            <input type="text" id="pokemon-search" placeholder="Pokemon suchen oder durchs Grid scrollen..." autocomplete="off">
             <div id="search-results" class="search-results"></div>
           </div>
+          <div id="challenger-pokemon-grid" style="max-height:350px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:4px;margin:8px 0;padding:4px;border:1px solid var(--border,#333);border-radius:8px;background:rgba(0,0,0,0.2);"></div>
 
           <!-- Trainer Lines -->
           <div class="trainer-lines-form">

@@ -13,6 +13,12 @@ let trainerSprites = [];
 let gymState = { active: false };
 let prevChallengerId = null;
 
+// --- WebRTC State ---
+let rtcPeer = null; // RTCPeerConnection
+let rtcRegistered = false;
+let rtcBattleId = null;
+let rtcIceBuffer = [];
+
 const socket = io({ transports: ['websocket', 'polling'] });
 
 // --- Init ---
@@ -45,11 +51,59 @@ function setupSocket() {
     }
     prevChallengerId = newChallenger?.twitchId || null;
 
+    // WebRTC: start/stop cam connection based on active battle
+    if (state.activeBattleId) {
+      startWebRtc(state.activeBattleId);
+    } else if (rtcRegistered) {
+      stopWebRtc();
+    }
+
     renderOverlay();
   });
 
   socket.on('GYM_BADGE_AWARDED', ({ twitchId, displayName, totalBadges }) => {
     showBadgeAlert(displayName, totalBadges);
+  });
+
+  // Live update when boss pokemon is revealed during battle
+  socket.on('GYM_BOSS_REVEAL', ({ battleId, revealedSlots }) => {
+    if (gymState.activeBattleId === battleId) {
+      gymState.revealedBossSlots = revealedSlots;
+      renderBossTeam();
+    }
+  });
+
+  // WebRTC: when challenger cam peer appears, initiate connection
+  socket.on('WEBRTC_PEERS', (peerList) => {
+    if (!rtcRegistered) return;
+    for (const peer of peerList) {
+      if (peer.role === 'pvp-cam') {
+        connectToPvpCam(peer.id);
+      }
+    }
+  });
+
+  // WebRTC: handle signaling from challenger cam
+  socket.on('SIGNAL', (payload) => {
+    if (!rtcRegistered) return;
+    const { fromRole, fromId, data } = payload;
+    if (fromRole !== 'pvp-cam') return;
+
+    if (data.type === 'answer' && rtcPeer) {
+      rtcPeer.setRemoteDescription(data.sdp).then(() => {
+        // Flush buffered ICE candidates
+        for (const c of rtcIceBuffer) {
+          rtcPeer.addIceCandidate(c);
+        }
+        rtcIceBuffer = [];
+      });
+    } else if (data.type === 'ice-candidate') {
+      if (rtcPeer && rtcPeer.remoteDescription) {
+        rtcPeer.addIceCandidate(data.candidate);
+      } else {
+        rtcIceBuffer.push(data.candidate);
+      }
+    }
   });
 }
 
@@ -154,6 +208,7 @@ function renderTrainerSprite(containerId, spriteKey, targetWidth) {
 function renderOverlay() {
   renderBattleBar();
   renderQueueBar();
+  renderBossTeam();
   renderLeaderboard();
 }
 
@@ -226,6 +281,125 @@ function renderLeaderboard() {
       <span class="lb-count">${entry.count}</span>
     `;
     container.appendChild(div);
+  });
+}
+
+// ===== BOSS TEAM (REVEALED SLOTS) =====
+function renderBossTeam() {
+  const box = document.getElementById('boss-team-box');
+  const container = document.getElementById('boss-team-slots');
+  const bossTeam = gymState.bossTeam || [];
+  const revealedSlots = gymState.revealedBossSlots || [];
+
+  // Only show during active battle
+  if (!gymState.activeBattleId || bossTeam.length === 0) {
+    box.classList.add('hidden');
+    return;
+  }
+  box.classList.remove('hidden');
+
+  container.innerHTML = '';
+  for (let i = 0; i < bossTeam.length; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'bt-slot';
+    if (revealedSlots.includes(i)) {
+      slot.classList.add('revealed');
+      const p = bossTeam[i];
+      slot.innerHTML = `<img src="${getIconPath(p.speciesId)}" alt="${p.name}" onerror="this.style.display='none'">`;
+    } else {
+      slot.innerHTML = '<span class="bt-hidden">?</span>';
+    }
+    container.appendChild(slot);
+  }
+}
+
+// ===== WEBRTC CHALLENGER CAM =====
+function startWebRtc(battleId) {
+  if (rtcBattleId === battleId && rtcRegistered) return; // Already set up
+  stopWebRtc(); // Clean up previous
+
+  rtcBattleId = battleId;
+  rtcRegistered = true;
+
+  socket.emit('REGISTER_WEBRTC', { role: 'gym-overlay', id: 'gym-overlay', raceCode: battleId });
+  console.log('[WebRTC] Registered as gym-overlay for battle', battleId);
+}
+
+function stopWebRtc() {
+  if (rtcPeer) {
+    rtcPeer.close();
+    rtcPeer = null;
+  }
+  rtcIceBuffer = [];
+  rtcBattleId = null;
+  rtcRegistered = false;
+
+  const camBox = document.getElementById('challenger-cam');
+  const video = document.getElementById('challenger-video');
+  if (video) video.srcObject = null;
+  if (camBox) camBox.classList.add('hidden');
+}
+
+function connectToPvpCam(peerId) {
+  if (rtcPeer) rtcPeer.close();
+
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+
+  const pc = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 10 });
+  rtcPeer = pc;
+
+  // We need to add a transceiver to receive video
+  pc.addTransceiver('video', { direction: 'recvonly' });
+
+  pc.ontrack = (event) => {
+    console.log('[WebRTC] Received challenger cam track');
+    const video = document.getElementById('challenger-video');
+    const camBox = document.getElementById('challenger-cam');
+    if (video && event.streams[0]) {
+      video.srcObject = event.streams[0];
+      camBox.classList.remove('hidden');
+      // Set challenger name
+      const label = document.getElementById('cam-label');
+      if (label && gymState.currentChallenger) {
+        label.textContent = gymState.currentChallenger.displayName;
+      }
+    }
+  };
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('SIGNAL', {
+        targetRole: 'pvp-cam',
+        targetId: peerId,
+        signalData: { type: 'ice-candidate', candidate: event.candidate },
+      });
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log('[WebRTC] ICE state:', pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed') {
+      pc.restartIce();
+    }
+    if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+      const camBox = document.getElementById('challenger-cam');
+      if (camBox) camBox.classList.add('hidden');
+    }
+  };
+
+  // Create offer and send
+  pc.createOffer().then(offer => {
+    return pc.setLocalDescription(offer);
+  }).then(() => {
+    socket.emit('SIGNAL', {
+      targetRole: 'pvp-cam',
+      targetId: peerId,
+      signalData: { type: 'offer', sdp: pc.localDescription },
+    });
+    console.log('[WebRTC] Sent offer to', peerId);
   });
 }
 

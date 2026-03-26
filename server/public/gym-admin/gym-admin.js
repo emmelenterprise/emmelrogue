@@ -16,6 +16,8 @@ const STREAMER_ID = '647322993';
 let currentUser = null;
 let pokemonData = {};
 let trainerSprites = [];
+let moveData = {};
+let learnsets = {};
 let gymState = { active: false };
 
 // Boss team editor state
@@ -36,12 +38,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   loadUser();
 
   try {
-    const [pdRes, spRes] = await Promise.all([
+    const [pdRes, spRes, mdRes, lsRes] = await Promise.all([
       fetch('/api/pokemon-data'),
       fetch('/api/trainer-sprites'),
+      fetch('/api/move-data'),
+      fetch('/api/pokemon-learnsets'),
     ]);
     pokemonData = await pdRes.json();
     trainerSprites = await spRes.json();
+    moveData = await mdRes.json();
+    learnsets = await lsRes.json();
     populateSpriteSelect();
   } catch (e) {
     console.error('Failed to load data:', e);
@@ -134,6 +140,9 @@ function setupSocket() {
   socket.on('GYM_BATTLE_CREATED', ({ battleId }) => {
     gymState.activeBattleId = battleId;
     renderAll();
+    // Auto-open boss battle in new tab
+    const bossUrl = `${window.location.origin}/?pvp=${battleId}&side=boss`;
+    window.open(bossUrl, '_blank');
   });
 }
 
@@ -242,7 +251,11 @@ function setupSearch() {
   const input = document.getElementById('boss-search');
   const results = document.getElementById('boss-search-results');
 
+  // Render initial grid
+  renderBossPokemonGrid();
+
   input.addEventListener('input', () => {
+    renderBossPokemonGrid(input.value);
     const q = input.value.trim().toLowerCase();
     if (q.length < 2) {
       results.classList.remove('show');
@@ -312,9 +325,28 @@ function renderSearchResults(matches, container) {
   container.classList.add('show');
 }
 
+function getDefaultMoves(speciesId) {
+  const ls = learnsets[speciesId];
+  if (!ls || !ls.level) return [null, null, null, null];
+  // Top 4 moves by highest level (de-duped)
+  const sorted = [...ls.level].sort((a, b) => b[0] - a[0]);
+  const seen = new Set();
+  const top = [];
+  for (const [, moveId] of sorted) {
+    if (!seen.has(moveId)) {
+      seen.add(moveId);
+      top.push(moveId);
+      if (top.length >= 4) break;
+    }
+  }
+  while (top.length < 4) top.push(null);
+  return top;
+}
+
 function addToBossTeam(pokemon, formIndex, formName) {
   if (bossTeam.length >= 6) return;
-  const entry = { speciesId: pokemon.speciesId, name: pokemon.name, cost: pokemon.cost, shiny: false, variant: 0 };
+  const defaultMoves = getDefaultMoves(pokemon.speciesId);
+  const entry = { speciesId: pokemon.speciesId, name: pokemon.name, cost: pokemon.cost, shiny: false, variant: 0, moves: defaultMoves };
   if (formIndex !== undefined && formIndex > 0) {
     entry.formIndex = formIndex;
     entry.formName = formName || '';
@@ -334,6 +366,116 @@ function toggleShiny(index) {
   else { p.shiny = false; p.variant = 0; }
   renderBossTeam();
 }
+
+// --- Move Editor ---
+let activeMoveDropdown = null;
+
+function openMoveSearch(pokemonIdx, moveIdx, input) {
+  closeAllMoveDropdowns();
+  input.select(); // Select text for easy replacement
+  filterMoves(pokemonIdx, moveIdx, input);
+}
+
+function getLearnableMoves(speciesId) {
+  const ls = learnsets[speciesId];
+  if (!ls) return [];
+  const moves = [];
+  const seen = new Set();
+
+  // Level-up moves
+  if (ls.level) {
+    for (const [level, moveId] of ls.level) {
+      if (!seen.has(moveId) && moveData[moveId]) {
+        seen.add(moveId);
+        moves.push({ id: moveId, ...moveData[moveId], source: 'level', level });
+      }
+    }
+  }
+
+  // Egg moves
+  if (ls.egg) {
+    for (const moveId of ls.egg) {
+      if (!seen.has(moveId) && moveData[moveId]) {
+        seen.add(moveId);
+        moves.push({ id: moveId, ...moveData[moveId], source: 'egg' });
+      }
+    }
+  }
+
+  // TM moves
+  if (ls.tm) {
+    for (const moveId of ls.tm) {
+      if (!seen.has(moveId) && moveData[moveId]) {
+        seen.add(moveId);
+        moves.push({ id: moveId, ...moveData[moveId], source: 'tm' });
+      }
+    }
+  }
+
+  return moves;
+}
+
+function filterMoves(pokemonIdx, moveIdx, input) {
+  const query = input.value.toLowerCase().trim();
+  const resultsDiv = document.getElementById(`move-results-${pokemonIdx}-${moveIdx}`);
+  if (!resultsDiv) return;
+
+  const p = bossTeam[pokemonIdx];
+  if (!p) return;
+
+  const learnable = getLearnableMoves(p.speciesId);
+
+  // Show all learnable moves when focused (even without query)
+  const matches = query.length < 1
+    ? learnable.slice(0, 30)
+    : learnable.filter(m => m.name.toLowerCase().includes(query) || m.name_en.toLowerCase().includes(query)).slice(0, 20);
+
+  if (matches.length === 0) {
+    resultsDiv.innerHTML = '<div class="move-no-results">Keine Treffer</div>';
+    resultsDiv.classList.add('show');
+    return;
+  }
+
+  resultsDiv.innerHTML = '';
+  for (const m of matches) {
+    const div = document.createElement('div');
+    div.className = 'move-result-item' + (m.source === 'egg' ? ' egg-move' : m.source === 'tm' ? ' tm-move' : '');
+    const tag = m.source === 'egg' ? ' <span class="egg-tag">EGG</span>' : m.source === 'tm' ? ' <span class="tm-tag">TM</span>' : '';
+    div.innerHTML = `${m.name} <span class="move-en">(${m.name_en})</span>${tag}`;
+    div.addEventListener('click', () => selectMove(pokemonIdx, moveIdx, m.id, m.name));
+    resultsDiv.appendChild(div);
+  }
+  resultsDiv.classList.add('show');
+  activeMoveDropdown = resultsDiv;
+}
+
+function selectMove(pokemonIdx, moveIdx, moveId, moveName) {
+  const p = bossTeam[pokemonIdx];
+  if (!p) return;
+  if (!p.moves) p.moves = [null, null, null, null];
+  p.moves[moveIdx] = moveId;
+  closeAllMoveDropdowns();
+  renderBossTeam();
+}
+
+function clearMove(pokemonIdx, moveIdx) {
+  const p = bossTeam[pokemonIdx];
+  if (!p || !p.moves) return;
+  p.moves[moveIdx] = null;
+  renderBossTeam();
+}
+
+function closeAllMoveDropdowns() {
+  document.querySelectorAll('.move-results.show').forEach(el => el.classList.remove('show'));
+  activeMoveDropdown = null;
+}
+
+// Close move dropdown when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.move-slot')) {
+    closeAllMoveDropdowns();
+  }
+});
 
 // --- Drag and Drop ---
 let dragIndex = null;
@@ -395,6 +537,30 @@ function renderBossTeam() {
     slot.addEventListener('dragend', onDragEnd);
     slot.addEventListener('dragover', (e) => onDragOver(e, i));
     slot.addEventListener('drop', (e) => onDrop(e, i));
+    // Build move slots HTML
+    const moves = p.moves || [null, null, null, null];
+    const ls = learnsets[p.speciesId];
+    const eggMoveIds = new Set(ls?.egg || []);
+    const tmMoveIds = new Set(ls?.tm || []);
+    let moveSlotsHtml = '<div class="move-slots">';
+    for (let m = 0; m < 4; m++) {
+      const move = moves[m];
+      const moveName = move ? (moveData[move]?.name || moveData[move]?.name_en || `Move #${move}`) : '';
+      const isEgg = move && eggMoveIds.has(move);
+      const isTm = move && !isEgg && tmMoveIds.has(move);
+      const inputClass = 'move-input' + (isEgg ? ' is-egg' : isTm ? ' is-tm' : '');
+      moveSlotsHtml += `
+        <div class="move-slot" data-pokemon="${i}" data-move-index="${m}">
+          <input type="text" class="${inputClass}" placeholder="Attacke ${m + 1}" value="${moveName}"
+                 onfocus="openMoveSearch(${i}, ${m}, this)"
+                 oninput="filterMoves(${i}, ${m}, this)">
+          ${move ? `<button class="move-clear" onclick="clearMove(${i}, ${m})">&times;</button>` : ''}
+          <div class="move-results" id="move-results-${i}-${m}"></div>
+        </div>
+      `;
+    }
+    moveSlotsHtml += '</div>';
+
     slot.innerHTML = `
       <button class="remove" onclick="removeBossSlot(${i})">&times;</button>
       <img src="${getIconPath(p.speciesId)}" alt="${p.name}" onerror="this.style.display='none'">
@@ -404,6 +570,7 @@ function renderBossTeam() {
       <button class="shiny-toggle" onclick="toggleShiny(${i})" style="color:${shinyColors[shinyState]}" title="Shiny umschalten">
         &#10022; ${shinyLabels[shinyState] || 'Normal'}
       </button>
+      ${moveSlotsHtml}
     `;
     container.appendChild(slot);
   }
@@ -430,7 +597,7 @@ function switchPresetTab(index) {
 
   // Load new tab
   const preset = localPresets[index];
-  bossTeam = (preset.team || []).map(p => ({ ...p }));
+  bossTeam = (preset.team || []).map(p => ({ ...p, moves: p.moves ? [...p.moves] : [null, null, null, null] }));
   selectedBossSprite = preset.spriteKey || 'gym_leader_brock';
   document.getElementById('boss-sprite').value = selectedBossSprite;
   updateSpriteDisplay('boss', selectedBossSprite);
@@ -450,6 +617,9 @@ function buildTeamPayload(team) {
     const entry = { speciesId: p.speciesId };
     if (p.formIndex) entry.formIndex = p.formIndex;
     if (p.shiny) { entry.shiny = true; entry.variant = p.variant || 0; }
+    if (p.moves && p.moves.some(m => m !== null)) {
+      entry.moves = p.moves;
+    }
     return entry;
   });
 }
@@ -467,11 +637,13 @@ function saveBossTeam() {
     presetName: `Team ${activePresetTab + 1}`,
   });
 
-  socket.emit('GYM_SET_BOSS_TEAM', {
-    twitchId: currentUser.id,
-    team: teamPayload,
-    spriteKey,
-  });
+  if (gymState.active) {
+    socket.emit('GYM_SET_BOSS_TEAM', {
+      twitchId: currentUser.id,
+      team: teamPayload,
+      spriteKey,
+    });
+  }
 }
 
 function activatePreset() {
@@ -695,8 +867,8 @@ function renderAll() {
     challengerLink.style.display = 'none';
   }
 
-  // Show/hide panels
-  document.getElementById('boss-panel').style.display = active ? 'block' : 'none';
+  // Show/hide panels — Boss panel always visible for team editing
+  document.getElementById('boss-panel').style.display = 'block';
   document.getElementById('battle-panel').style.display = active ? 'block' : 'none';
   document.getElementById('queue-panel').style.display = active ? 'block' : 'none';
   document.getElementById('history-panel').style.display = active ? 'block' : 'none';
@@ -732,43 +904,111 @@ function renderAll() {
     }
   }
 
-  if (active) {
-    // Sync presets from server
-    if (gymState.bossTeamPresets && gymState.bossTeamPresets.length) {
-      for (let i = 0; i < 3; i++) {
-        const sp = gymState.bossTeamPresets[i];
-        if (sp && sp.team && sp.team.length > 0) {
-          localPresets[i] = {
-            name: sp.name || `Team ${i + 1}`,
-            team: sp.team.map(p => ({ speciesId: p.speciesId, name: p.name, cost: p.cost, formIndex: p.formIndex, formName: p.formName, shiny: !!p.shiny, variant: p.variant || 0 })),
-            spriteKey: sp.spriteKey || 'gym_leader_brock',
-          };
-        }
+  // Sync presets from server (works both with active session and persisted presets)
+  const serverPresets = active ? gymState.bossTeamPresets : gymState.persistedPresets;
+  if (serverPresets && serverPresets.length) {
+    for (let i = 0; i < 3; i++) {
+      const sp = serverPresets[i];
+      if (sp && sp.team && sp.team.length > 0) {
+        localPresets[i] = {
+          name: sp.name || `Team ${i + 1}`,
+          team: sp.team.map(p => ({ speciesId: p.speciesId, name: p.name, cost: p.cost, formIndex: p.formIndex, formName: p.formName, shiny: !!p.shiny, variant: p.variant || 0, moves: p.moves ? [...p.moves] : [null, null, null, null] })),
+          spriteKey: sp.spriteKey || 'gym_leader_brock',
+        };
       }
     }
+  }
 
-    // Load active preset tab
-    const preset = localPresets[activePresetTab];
-    if (bossTeam.length === 0 && preset.team.length > 0) {
-      bossTeam = preset.team.map(p => ({ ...p }));
-      selectedBossSprite = preset.spriteKey || 'gym_leader_brock';
-      document.getElementById('boss-sprite').value = selectedBossSprite;
-      updateSpriteDisplay('boss', selectedBossSprite);
-    } else if (bossTeam.length === 0 && gymState.bossTeam && gymState.bossTeam.length > 0) {
-      bossTeam = gymState.bossTeam.map(p => ({ speciesId: p.speciesId, name: p.name, cost: p.cost }));
-    }
+  // Load active preset tab
+  const preset = localPresets[activePresetTab];
+  if (bossTeam.length === 0 && preset.team.length > 0) {
+    bossTeam = preset.team.map(p => ({ ...p, moves: p.moves ? [...p.moves] : [null, null, null, null] }));
+    selectedBossSprite = preset.spriteKey || 'gym_leader_brock';
+    document.getElementById('boss-sprite').value = selectedBossSprite;
+    updateSpriteDisplay('boss', selectedBossSprite);
+  } else if (bossTeam.length === 0 && gymState.bossTeam && gymState.bossTeam.length > 0) {
+    bossTeam = gymState.bossTeam.map(p => ({ speciesId: p.speciesId, name: p.name, cost: p.cost, moves: p.moves ? [...p.moves] : [null, null, null, null] }));
+  }
 
-    // Update tab UI
-    document.querySelectorAll('.preset-tab').forEach((tab, i) => {
-      tab.classList.toggle('active', i === activePresetTab);
-      tab.classList.toggle('server-active', gymState.activeBossPreset === i);
-      const p = localPresets[i];
-      tab.textContent = p.team.length > 0 ? `Team ${i + 1} (${p.team.length})` : `Team ${i + 1}`;
-    });
+  // Update tab UI
+  document.querySelectorAll('.preset-tab').forEach((tab, i) => {
+    tab.classList.toggle('active', i === activePresetTab);
+    tab.classList.toggle('server-active', active && gymState.activeBossPreset === i);
+    const p = localPresets[i];
+    tab.textContent = p.team.length > 0 ? `Team ${i + 1} (${p.team.length})` : `Team ${i + 1}`;
+  });
 
-    renderBossTeam();
+  renderBossTeam();
+
+  if (active) {
     renderQueue();
     renderHistory();
     renderConfig();
+  }
+}
+
+// --- Pokemon Grid for Boss Team ---
+let bossGridCache = null;
+
+function renderBossPokemonGrid(filter) {
+  const grid = document.getElementById('boss-pokemon-grid');
+  if (!grid) return;
+
+  if (!bossGridCache) {
+    bossGridCache = [];
+    for (const [id, data] of Object.entries(pokemonData)) {
+      bossGridCache.push({
+        id: parseInt(id),
+        name: data.name_de || data.name,
+        nameEn: data.name,
+        cost: data.cost,
+        gen: data.generation || 1,
+      });
+    }
+    bossGridCache.sort((a, b) => a.id - b.id);
+  }
+
+  const query = (filter || '').toLowerCase().trim();
+  const filtered = query.length >= 2
+    ? bossGridCache.filter(p => p.name.toLowerCase().includes(query) || p.nameEn.toLowerCase().includes(query))
+    : bossGridCache;
+
+  const budget = gymState.config?.bossBudget || 18;
+  const usedBudget = bossTeam.reduce((sum, p) => sum + p.cost, 0);
+  const remainingBudget = budget - usedBudget;
+  const teamFull = bossTeam.length >= 6;
+
+  grid.innerHTML = '';
+  for (const p of filtered) {
+    const cell = document.createElement('div');
+    const isInTeam = bossTeam.some(bp => bp.speciesId === p.id);
+    const tooExpensive = !isInTeam && (p.cost > remainingBudget || teamFull);
+    cell.style.cssText = `
+      display:flex;flex-direction:column;align-items:center;padding:4px;
+      border-radius:6px;cursor:${tooExpensive ? 'not-allowed' : 'pointer'};
+      border:1px solid ${isInTeam ? 'var(--accent,#7c3aed)' : 'transparent'};
+      background:${isInTeam ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.03)'};
+      opacity:${tooExpensive ? '0.3' : '1'};
+      transition:all 0.15s;font-size:0.65rem;text-align:center;
+    `;
+    cell.innerHTML = `
+      <img src="${getIconPath(p.id)}" alt="" style="width:32px;height:32px;image-rendering:pixelated;" onerror="this.style.display='none'" loading="lazy">
+      <span style="color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:65px;">${p.name}</span>
+      <span style="color:${p.cost >= 8 ? '#ef4444' : p.cost >= 5 ? '#eab308' : '#22c55e'};font-weight:bold;">${p.cost}</span>
+    `;
+    if (!tooExpensive) {
+      cell.addEventListener('mouseenter', () => { if (!isInTeam) cell.style.background = 'rgba(255,255,255,0.08)'; });
+      cell.addEventListener('mouseleave', () => { if (!isInTeam) cell.style.background = 'rgba(255,255,255,0.03)'; });
+      cell.addEventListener('click', () => {
+        if (isInTeam) {
+          const idx = bossTeam.findIndex(bp => bp.speciesId === p.id);
+          if (idx >= 0) { bossTeam.splice(idx, 1); renderBossTeam(); renderBossPokemonGrid(query); }
+        } else {
+          addToBossTeam({ speciesId: p.id, name: p.name, cost: p.cost });
+          renderBossPokemonGrid(query);
+        }
+      });
+    }
+    grid.appendChild(cell);
   }
 }
