@@ -693,7 +693,7 @@ io.on('connection', (socket) => {
     socket.data.playerNumber = 1;
 
     // Auto-create a chat session for the race so community can connect immediately
-    const chatSessionId = chatFeature.createSession(`race-${code}`, code);
+    const chatSessionId = chatFeature.createSession(`race-${code}`, code, race.winWave);
     const chatSession = chatFeature.getSession(chatSessionId);
     race.chatSessionId = chatSessionId;
     if (chatSession) chatSession.hostSocketId = socket.id;
@@ -924,6 +924,13 @@ io.on('connection', (socket) => {
     if (respawnOnWipe !== undefined) race.respawnOnWipe = !!respawnOnWipe;
     if (shinyMode !== undefined && ['off', 'boosted', 'guaranteed'].includes(shinyMode)) race.shinyMode = shinyMode;
     if (luckLevel !== undefined) race.luckLevel = Math.max(-1, Math.min(14, parseInt(luckLevel)));
+
+    // Propagate winWave to chat session
+    if (winWave !== undefined && race.chatSessionId) {
+      const chatSession = chatFeature.getSession(race.chatSessionId);
+      if (chatSession) chatSession.winWave = race.winWave;
+      io.to(`chat:${race.chatSessionId}`).emit('CHAT_WIN_WAVE_CHANGED', { winWave: race.winWave });
+    }
 
     // Propagate nuzlockeCatch to chat session
     if (nuzlockeCatch !== undefined && race.chatSessionId) {
@@ -1357,7 +1364,9 @@ io.on('connection', (socket) => {
       }
     }
 
-    const sessionId = chatFeature.createSession(seed, raceCode);
+    // winWave aus dem Race holen wenn vorhanden
+    const race = raceCode ? races.get(raceCode) : null;
+    const sessionId = chatFeature.createSession(seed, raceCode, race?.winWave);
     const session = chatFeature.getSession(sessionId);
     if (session) session.hostSocketId = socket.id;
     socket.data.chatSessionId = sessionId;
@@ -1455,6 +1464,12 @@ io.on('connection', (socket) => {
       socket.emit('CHAT_ERROR', { message: 'Session nicht gefunden' });
       return;
     }
+    // Fallback: winWave aus dem Race holen falls Session es nicht hat
+    if (!session.winWave && session.raceCode) {
+      const race = races.get(session.raceCode);
+      if (race?.winWave) session.winWave = race.winWave;
+    }
+
     socket.join(`chat:${sessionId}`);
     socket.data.chatSessionId = sessionId;
 
@@ -1468,6 +1483,7 @@ io.on('connection', (socket) => {
       currentWave: session.currentWave,
       currentBiome: session.currentBiome,
       config: session.config,
+      winWave: session.winWave || 200,
       nuzlockeCatch: session.nuzlockeCatch || false,
       streamerParty: session.streamerParty || [],
       activeVote: chatFeature.getVoteState(session),
@@ -1480,17 +1496,20 @@ io.on('connection', (socket) => {
   });
 
   // Community Page: claim trainer
-  socket.on('COMMUNITY_CLAIM_TRAINER', ({ sessionId, wave, twitchUserId, displayName, anonymous, spriteKey }) => {
+  socket.on('COMMUNITY_CLAIM_TRAINER', ({ sessionId, wave, twitchUserId, displayName, anonymous, spriteKey, trainerLines, presetParty }) => {
     if (!sessionId || !wave || !twitchUserId) return;
     const requestedWave = parseInt(wave);
-    const result = chatFeature.claimTrainer(sessionId, requestedWave, twitchUserId, displayName || twitchUserId, !!anonymous, spriteKey || null);
+    const result = chatFeature.claimTrainer(sessionId, requestedWave, twitchUserId, displayName || twitchUserId, !!anonymous, spriteKey || null, trainerLines || null, presetParty || null);
     if (result.success) {
       const claimedWave = result.waveIndex || requestedWave;
+      const claimedTrainer = chatFeature.getSession(sessionId)?.trainers?.get(claimedWave);
       io.to(`chat:${sessionId}`).emit('CHAT_TRAINER_CLAIMED', {
         wave: claimedWave,
         claimedBy: twitchUserId,
         claimedByName: anonymous ? '???' : displayName,
         anonymous: !!anonymous,
+        spriteKey: claimedTrainer?.customSprite || null,
+        trainerLines: claimedTrainer?.trainerLines || null,
       });
       // Push customization to game client in real-time
       const custom = chatFeature.getCustomization(sessionId, claimedWave);
@@ -1581,9 +1600,9 @@ io.on('connection', (socket) => {
   });
 
   // Community Page: insert custom trainer (Wild → Trainer)
-  socket.on('COMMUNITY_INSERT_TRAINER', ({ sessionId, wave, twitchUserId, displayName, anonymous, spriteKey, party }) => {
-    if (!sessionId || !wave || !twitchUserId || !party) return;
-    const result = chatFeature.insertCustomTrainer(sessionId, parseInt(wave), twitchUserId, displayName || twitchUserId, spriteKey, party, !!anonymous);
+  socket.on('COMMUNITY_INSERT_TRAINER', ({ sessionId, wave, twitchUserId, displayName, anonymous, spriteKey, party, trainerLines }) => {
+    if (!sessionId || !wave || !twitchUserId) return;
+    const result = chatFeature.insertCustomTrainer(sessionId, parseInt(wave), twitchUserId, displayName || twitchUserId, spriteKey, party || [], !!anonymous, trainerLines || null);
     if (result.success) {
       const visible = chatFeature.getVisibleTrainers(sessionId);
       io.to(`chat:${sessionId}`).emit('CHAT_TRAINER_LIST', { trainers: visible });

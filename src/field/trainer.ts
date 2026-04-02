@@ -35,6 +35,10 @@ export class Trainer extends Phaser.GameObjects.Container {
   public overrideName: string | null = null;
   /** Chat feature: override the trainer sprite key */
   public overrideSpriteKey: string | null = null;
+  /** Chat feature: override trainer dialogue lines */
+  public overrideEncounterMessages: string[] | null = null;
+  public overrideVictoryMessages: string[] | null = null;
+  public overrideDefeatMessages: string[] | null = null;
 
   /**
    * Create a new Trainer.
@@ -247,6 +251,7 @@ export class Trainer extends Phaser.GameObjects.Container {
   }
 
   getEncounterMessages(): string[] {
+    if (this.overrideEncounterMessages) return this.overrideEncounterMessages;
     return this.variant
       ? (this.variant === TrainerVariant.DOUBLE
           ? this.config.doubleEncounterMessages
@@ -255,6 +260,7 @@ export class Trainer extends Phaser.GameObjects.Container {
   }
 
   getVictoryMessages(): string[] {
+    if (this.overrideVictoryMessages) return this.overrideVictoryMessages;
     return this.variant
       ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleVictoryMessages : this.config.femaleVictoryMessages)
           || this.config.victoryMessages
@@ -262,6 +268,7 @@ export class Trainer extends Phaser.GameObjects.Container {
   }
 
   getDefeatMessages(): string[] {
+    if (this.overrideDefeatMessages) return this.overrideDefeatMessages;
     return this.variant
       ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleDefeatMessages : this.config.femaleDefeatMessages)
           || this.config.defeatMessages

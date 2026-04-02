@@ -25,7 +25,193 @@ let activeVote = null;
 let activeGimmicks = [];
 let streamerParty = [];
 let currentWave = 0;
+let winWave = 200;
 let nuzlockeCatch = false;
+
+// --- Trainer Profile (localStorage) ---
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem('emmelrogue_profile') || '{}'); } catch { return {}; }
+}
+function saveProfile() {
+  const profile = {
+    spriteKey: document.getElementById('profile-sprite-preview').dataset.spriteKey || null,
+    intro: document.getElementById('profile-intro').value.trim(),
+    victory: document.getElementById('profile-victory').value.trim(),
+    defeat: document.getElementById('profile-defeat').value.trim(),
+    anonymous: document.getElementById('profile-anon').checked,
+  };
+  localStorage.setItem('emmelrogue_profile', JSON.stringify(profile));
+}
+// --- Team Presets (localStorage) ---
+let presetEditIndex = -1; // -1 = not editing preset, 0-2 = editing preset slot
+
+function loadPresets() {
+  try { return JSON.parse(localStorage.getItem('emmelrogue_presets') || '[]'); } catch { return []; }
+}
+function savePreset(index, team) {
+  const presets = loadPresets();
+  presets[index] = team;
+  localStorage.setItem('emmelrogue_presets', JSON.stringify(presets));
+  updatePresetButtons();
+}
+function updatePresetButtons() {
+  const presets = loadPresets();
+  for (let i = 0; i < 3; i++) {
+    const card = document.getElementById(`preset-${i}`);
+    const iconsEl = document.getElementById(`preset-icons-${i}`);
+    if (!card || !iconsEl) continue;
+    const team = presets[i];
+    if (team && team.length > 0) {
+      card.classList.add('has-team');
+      card.title = team.map(p => p.name).join(', ');
+      iconsEl.innerHTML = team.map(p => {
+        const src = p.speciesId ? getIconPath(p.speciesId) : '';
+        return src ? `<img src="${src}" alt="${p.name}" title="${p.name} (${p.cost})" onerror="this.style.display='none'">` : '';
+      }).join('');
+    } else {
+      card.classList.remove('has-team');
+      card.title = 'Klicken um Team zu bauen';
+      iconsEl.innerHTML = '<span class="preset-card-empty">leer</span>';
+    }
+  }
+}
+function openPresetEditor(index) {
+  presetEditIndex = index;
+  editingWave = null;
+  editingTrainer = null;
+  // Use max budget (48) for presets — actual budget check happens at claim time
+  editBudget = 48;
+  const presets = loadPresets();
+  const team = presets[index] || [];
+  editParty = team.map(p => ({
+    speciesId: p.speciesId,
+    name: p.name || pokemonData[String(p.speciesId)]?.name_de || 'Unknown',
+    cost: p.cost || pokemonData[String(p.speciesId)]?.cost || 0,
+    shiny: p.shiny || false,
+    nickname: null,
+  }));
+  document.getElementById('modal-wave').textContent = `Preset ${index + 1}`;
+  document.getElementById('budget-max').textContent = '∞';
+  renderPartySlots();
+  renderPokemonGrid();
+  document.getElementById('team-modal').style.display = 'flex';
+  document.getElementById('pokemon-search').value = '';
+}
+// Get the best fitting preset for a given budget
+function getPresetForBudget(budget) {
+  const presets = loadPresets();
+  // Try presets 0, 1, 2 — return first that fits budget
+  for (const team of presets) {
+    if (!team || team.length === 0) continue;
+    const totalCost = team.reduce((sum, p) => sum + (p.cost || 0), 0);
+    if (totalCost <= budget) return team;
+  }
+  // No preset fits — try trimming the first preset with a team
+  for (const team of presets) {
+    if (!team || team.length === 0) continue;
+    // Take as many pokemon as budget allows (from front)
+    const trimmed = [];
+    let remaining = budget;
+    for (const p of team) {
+      if ((p.cost || 0) <= remaining) {
+        trimmed.push(p);
+        remaining -= (p.cost || 0);
+      }
+    }
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function loadPresetIntoEditor(index) {
+  const presets = loadPresets();
+  const team = presets[index];
+  if (!team || team.length === 0) {
+    showToast(`Team ${index + 1} ist leer`, true);
+    return;
+  }
+  const maxSlots = getEditMaxSlots();
+  // Trim to budget if not in preset edit mode
+  if (presetEditIndex >= 0) {
+    editParty = team.slice(0, 6).map(p => ({
+      speciesId: p.speciesId,
+      name: p.name || pokemonData[String(p.speciesId)]?.name_de || 'Unknown',
+      cost: p.cost || pokemonData[String(p.speciesId)]?.cost || 0,
+      shiny: p.shiny || false, nickname: null,
+    }));
+  } else {
+    editParty = [];
+    let remaining = editBudget;
+    for (const p of team) {
+      if (editParty.length >= maxSlots) break;
+      const cost = pokemonData[String(p.speciesId)]?.cost || p.cost || 0;
+      if (cost <= remaining) {
+        editParty.push({
+          speciesId: p.speciesId,
+          name: p.name || pokemonData[String(p.speciesId)]?.name_de || 'Unknown',
+          cost, shiny: p.shiny || false, nickname: null,
+        });
+        remaining -= cost;
+      }
+    }
+    if (editParty.length === 0) {
+      showToast(`Team ${index + 1} passt nicht ins Budget (${editBudget})`, true);
+      return;
+    }
+    if (editParty.length < team.length) {
+      showToast(`${editParty.length}/${team.length} Pokemon passen ins Budget`);
+    }
+  }
+  renderPartySlots();
+}
+
+function initProfile() {
+  const p = loadProfile();
+  if (p.intro) document.getElementById('profile-intro').value = p.intro;
+  if (p.victory) document.getElementById('profile-victory').value = p.victory;
+  if (p.defeat) document.getElementById('profile-defeat').value = p.defeat;
+  if (p.anonymous !== undefined) document.getElementById('profile-anon').checked = p.anonymous;
+  if (p.spriteKey) renderProfileSprite(p.spriteKey);
+  // Auto-Save bei jeder Änderung
+  ['profile-intro', 'profile-victory', 'profile-defeat'].forEach(id => {
+    document.getElementById(id).addEventListener('input', saveProfile);
+  });
+  document.getElementById('profile-anon').addEventListener('change', saveProfile);
+  updatePresetButtons();
+}
+function renderProfileSprite(spriteKey) {
+  const el = document.getElementById('profile-sprite-preview');
+  el.dataset.spriteKey = spriteKey;
+  const spriteData = trainerSprites.find(s => s.key === spriteKey);
+  if (spriteData?.frame) {
+    const f = spriteData.frame;
+    const scale = Math.min(60 / f.w, 60 / f.h);
+    const sw = Math.round(f.sw * scale);
+    const sh = Math.round(f.sh * scale);
+    const ox = Math.round(-f.x * scale);
+    const oy = Math.round(-f.y * scale);
+    const dw = Math.round(f.w * scale);
+    const dh = Math.round(f.h * scale);
+    el.innerHTML = `<div style="width:${dw}px;height:${dh}px;margin:auto;background:url('/images/trainer/${spriteKey}.png') ${ox}px ${oy}px / ${sw}px ${sh}px no-repeat;image-rendering:pixelated;"></div>`;
+  } else {
+    el.innerHTML = `<img src="/images/trainer/${spriteKey}.png" alt="${spriteKey}" style="width:60px;height:60px;object-fit:contain;image-rendering:pixelated;" onerror="this.parentElement.innerHTML='<span class=profile-sprite-label>Sprite</span>'">`;
+  }
+}
+function openProfileSpriteModal() {
+  spriteModalWave = null;
+  spriteModalClaimMode = false;
+  document.getElementById('sprite-search').value = '';
+  const anonRow = document.getElementById('sprite-modal-anon-row');
+  if (anonRow) anonRow.style.display = 'none';
+  const skipBtn = document.getElementById('sprite-modal-skip');
+  if (skipBtn) skipBtn.style.display = 'none';
+  const titleEl = document.getElementById('sprite-modal-title');
+  if (titleEl) titleEl.textContent = 'Profil-Sprite wählen';
+  renderSpriteGrid('', loadProfile().spriteKey);
+  document.getElementById('sprite-modal').style.display = 'flex';
+  // Override select behavior for profile
+  document.getElementById('sprite-modal').dataset.profileMode = 'true';
+}
 
 // --- Pending Claims (optimistic UI lock) ---
 let pendingClaimWaves = new Set(); // waves currently being claimed (disabled in UI)
@@ -246,6 +432,7 @@ function setupSocket() {
     document.getElementById('session-info').style.display = 'flex';
 
     currentWave = data.currentWave || 0;
+    winWave = data.winWave || 200;
     document.getElementById('current-wave').textContent = currentWave;
     document.getElementById('current-biome').textContent = data.currentBiome || '—';
     document.getElementById('session-code').textContent = sessionCode || '—';
@@ -257,9 +444,10 @@ function setupSocket() {
       document.getElementById('share-bar').style.display = 'flex';
     }
 
-    // Show insert button if user is logged in
+    // Show profile if user is logged in
     if (currentUser) {
-      document.getElementById('btn-insert-trainer').style.display = '';
+      document.getElementById('profile-section').style.display = '';
+      initProfile();
     }
 
     renderStreamerParty();
@@ -286,15 +474,25 @@ function setupSocket() {
   });
 
   socket.on('CHAT_TRAINER_CLAIMED', (data) => {
-    // Remove from pending if this wave was being claimed
     pendingClaimWaves.delete(data.wave);
     const t = trainers.find(t => t.waveIndex === data.wave);
     if (t) {
       t.claimedBy = data.claimedBy;
       t.claimedByName = data.claimedByName;
       t.anonymous = !!data.anonymous;
-      renderTrainers();
+      if (data.spriteKey) t.spriteKey = data.spriteKey;
+      if (data.trainerLines) t.trainerLines = data.trainerLines;
+    } else {
+      // Neuer Custom Trainer (war freie Welle) — in lokale Liste aufnehmen
+      trainers.push({
+        waveIndex: data.wave, claimedBy: data.claimedBy, claimedByName: data.claimedByName,
+        anonymous: !!data.anonymous, spriteKey: data.spriteKey || null,
+        trainerLines: data.trainerLines || null, category: 'custom',
+        trainerClass: 'Custom', isCustomInserted: true,
+        customParty: [], originalParty: [], pokemonNicknames: {},
+      });
     }
+    renderTrainers();
   });
 
   socket.on('CHAT_TRAINER_UNCLAIMED', (data) => {
@@ -369,6 +567,10 @@ function setupSocket() {
     renderTrainers();
   });
 
+  socket.on('CHAT_WIN_WAVE_CHANGED', (data) => {
+    winWave = data.winWave || 200;
+  });
+
   socket.on('CHAT_SESSION_ENDED', () => {
     sessionId = null;
     sessionCode = null;
@@ -441,12 +643,14 @@ function setupSocket() {
   });
 
   socket.on('COMMUNITY_INSERT_RESULT', (data) => {
+    // Remove from pending
+    if (data.trainer?.waveIndex) pendingClaimWaves.delete(data.trainer.waveIndex);
     if (!data.success) {
       showToast(data.error, true);
     } else {
-      showToast('Custom Trainer erstellt!');
-      closeInsertModal();
+      showToast('Trainer erstellt!');
     }
+    renderTrainers();
   });
 
   socket.on('disconnect', () => {
@@ -549,7 +753,7 @@ function setupUI() {
   });
 
   // Insert trainer modal
-  document.getElementById('btn-insert-trainer').addEventListener('click', openInsertModal);
+  // btn-insert-trainer entfernt — alle Wellen sind direkt im Grid claimbar
   document.getElementById('btn-close-insert').addEventListener('click', closeInsertModal);
   document.getElementById('btn-cancel-insert').addEventListener('click', closeInsertModal);
   document.getElementById('btn-save-insert').addEventListener('click', saveInsertTrainer);
@@ -583,7 +787,11 @@ function renderStreamerParty() {
     const hpPct = p.maxHp > 0 ? (p.hp / p.maxHp * 100) : 0;
     const hpColor = hpPct > 50 ? 'var(--green)' : hpPct > 25 ? 'var(--yellow)' : 'var(--red)';
 
+    const iconId = p.iconId || p.speciesId;
+    const iconSrc = iconId ? getIconPath(String(iconId).replace('s', '').replace(/-.*/, '')) : '';
+
     card.innerHTML = `
+      ${iconSrc ? `<img src="${iconSrc}" class="pm-icon" style="width:32px;height:32px;image-rendering:pixelated;" onerror="this.style.display='none'">` : ''}
       <div class="pm-name">${p.shiny ? '&#10024; ' : ''}${p.name}</div>
       <div class="pm-level">Lv.${p.level}</div>
       <div class="pm-hp-bar">
@@ -596,118 +804,105 @@ function renderStreamerParty() {
   }
 }
 
-// --- Render Trainers ---
+// --- Render All Waves as Grid ---
 function renderTrainers() {
   const grid = document.getElementById('trainer-grid');
   const noTrainers = document.getElementById('no-trainers');
   grid.innerHTML = '';
 
-  if (!trainers || trainers.length === 0) {
-    noTrainers.style.display = 'block';
-    return;
-  }
+  if (!sessionId) { noTrainers.style.display = 'block'; return; }
   noTrainers.style.display = 'none';
 
-  for (const t of trainers) {
+  const buffer = sessionConfig?.waveBuffer || 2;
+  // Build lookup from registered trainers
+  const trainerMap = {};
+  for (const t of trainers) trainerMap[t.waveIndex] = t;
+
+  for (let w = 1; w <= winWave; w++) {
+    const t = trainerMap[w]; // registered trainer or undefined (free wave)
+    const isPassed = w <= currentWave;
+    const isLocked = !isPassed && w <= currentWave + buffer;
+    const isNuzlockeBlocked = nuzlockeCatch && w % 10 === 1 && !isPassed && !isLocked;
+    const isClaimed = t?.claimedBy;
+    const isFixed = t?.isFixed;
+
     const card = document.createElement('div');
     card.className = 'trainer-card';
-    if (t.locked) card.classList.add('locked');
-    if (t.passed) card.classList.add('passed');
-    if (t.claimedBy) card.classList.add('claimed');
+    if (isPassed) card.classList.add('passed');
+    if (isLocked || isNuzlockeBlocked) card.classList.add('locked');
+    if (isClaimed) card.classList.add('claimed');
+    if (!t && !isPassed && !isLocked) card.classList.add('free-wave');
 
-    const catClass = `cat-${t.category}`;
-    const triggerLabel = getTriggerLabel(t.triggerType, t.triggerAmount);
-    const triggerClass = t.triggerType === 'free' ? 'trigger-free' : 'trigger-paid';
+    // Status
+    let statusText, statusClass;
+    if (isPassed) { statusText = 'Vorbei'; statusClass = 'status-locked'; }
+    else if (isNuzlockeBlocked) { statusText = 'Nuzlocke-Fang'; statusClass = 'status-locked'; }
+    else if (isLocked) { statusText = 'Gesperrt'; statusClass = 'status-locked'; }
+    else if (isClaimed) { statusText = `@${t.claimedByName}`; statusClass = 'status-claimed'; }
+    else if (isFixed) { statusText = 'Fester Trainer'; statusClass = 'status-locked'; }
+    else { statusText = 'Frei'; statusClass = 'status-available'; }
 
-    const isNuzlockeBlocked = nuzlockeCatch && t.waveIndex % 10 === 1 && !t.passed && !t.locked;
-    if (isNuzlockeBlocked) card.classList.add('locked');
-
-    let statusText = '';
-    let statusClass = '';
-    if (t.passed) {
-      statusText = 'Vorbei';
-      statusClass = 'status-locked';
-    } else if (isNuzlockeBlocked) {
-      statusText = 'Nuzlocke-Fang';
-      statusClass = 'status-locked';
-    } else if (t.locked) {
-      statusText = 'Gesperrt';
-      statusClass = 'status-locked';
-    } else if (t.claimedBy) {
-      statusText = `@${t.claimedByName}`;
-      statusClass = 'status-claimed';
-    } else {
-      statusText = 'Verfügbar';
-      statusClass = 'status-available';
-    }
-
-    // Party Pokemon icons
-    const party = t.customParty || t.originalParty || [];
-    const partyDots = party.map((p, i) => {
-      const nicknamed = t.pokemonNicknames && t.pokemonNicknames[i];
-      const title = (p.name || `Pokemon ${i+1}`) + (nicknamed ? ` (${nicknamed})` : '');
-      const sid = p.speciesId || 0;
-      const iconSrc = sid ? getIconPath(sid) : '';
-      const iconHtml = iconSrc ? `<img src="${iconSrc}" alt="" class="party-icon" onerror="this.style.display='none'">` : '';
-      return `<div class="party-dot${nicknamed ? ' nicknamed' : ''}" title="${title}" data-wave="${t.waveIndex}" data-slot="${i}">${iconHtml}</div>`;
-    }).join('');
-
-    // Sprite: show atlas-clipped thumbnail if spriteKey set, otherwise emoji fallback
-    let spriteHtml;
-    if (t.spriteKey) {
-      const spriteData = trainerSprites.find(s => s.key === t.spriteKey);
+    // Sprite
+    let spriteHtml = '';
+    const spriteKey = t?.spriteKey;
+    if (spriteKey) {
+      const spriteData = trainerSprites.find(s => s.key === spriteKey);
       if (spriteData?.frame) {
         const f = spriteData.frame;
         const scale = Math.min(64 / f.w, 64 / f.h);
-        const sw = Math.round(f.sw * scale);
-        const sh = Math.round(f.sh * scale);
-        const ox = Math.round(-f.x * scale);
-        const oy = Math.round(-f.y * scale);
-        const dw = Math.round(f.w * scale);
-        const dh = Math.round(f.h * scale);
-        spriteHtml = `<div style="width:${dw}px;height:${dh}px;margin:auto;background:url('/images/trainer/${t.spriteKey}.png') ${ox}px ${oy}px / ${sw}px ${sh}px no-repeat;image-rendering:pixelated;"></div>`;
+        const sw = Math.round(f.sw * scale), sh = Math.round(f.sh * scale);
+        const ox = Math.round(-f.x * scale), oy = Math.round(-f.y * scale);
+        const dw = Math.round(f.w * scale), dh = Math.round(f.h * scale);
+        spriteHtml = `<div style="width:${dw}px;height:${dh}px;margin:auto;background:url('/images/trainer/${spriteKey}.png') ${ox}px ${oy}px / ${sw}px ${sh}px no-repeat;image-rendering:pixelated;"></div>`;
       } else {
-        spriteHtml = `<img src="/images/trainer/${t.spriteKey}.png" alt="${t.spriteKey}" onerror="this.parentElement.innerHTML='${getSpriteEmoji(t.category)}'">`;
+        spriteHtml = `<img src="/images/trainer/${spriteKey}.png" style="width:64px;height:64px;object-fit:contain;image-rendering:pixelated;" onerror="this.style.display='none'">`;
       }
-    } else {
-      spriteHtml = getSpriteEmoji(t.category);
     }
 
+    // Party dots (compact)
+    const party = t ? (t.customParty || t.originalParty || []) : [];
+    const partyHtml = party.length > 0
+      ? `<div class="card-party">${party.map((p, i) => {
+          const sid = p.speciesId || 0;
+          const src = sid ? getIconPath(sid) : '';
+          return src ? `<div class="party-dot" data-wave="${w}" data-slot="${i}"><img src="${src}" class="party-icon" onerror="this.style.display='none'"></div>` : '';
+        }).join('')}</div>`
+      : '';
+
+    // Sprüche
+    const lines = t?.trainerLines;
+    const linesHtml = lines && (lines.intro || lines.victory || lines.defeat)
+      ? `<div class="card-lines">${lines.intro ? `<span>"${lines.intro}"</span>` : ''}</div>` : '';
+
+    // Category label
+    const catLabel = t ? formatCategory(t.category) : '';
+    const catClass = t ? `cat-${t.category}` : '';
+
     card.innerHTML = `
-      <span class="card-wave">W${t.waveIndex}</span>
-      <span class="card-category ${catClass}">${formatCategory(t.category)}</span>
-      <div class="card-sprite">${spriteHtml}</div>
-      <div class="card-class">${t.trainerClass || 'Trainer'}</div>
-      <div class="card-party">${partyDots}</div>
-      <div class="card-trigger ${triggerClass}">${triggerLabel}</div>
+      <span class="card-wave">W${w}</span>
+      ${catLabel ? `<span class="card-category ${catClass}">${catLabel}</span>` : ''}
+      ${spriteHtml ? `<div class="card-sprite">${spriteHtml}</div>` : ''}
+      ${t ? `<div class="card-class">${t.trainerClass || ''}</div>` : ''}
+      ${linesHtml}
+      ${partyHtml}
       <div class="card-status ${statusClass}">${statusText}</div>
-      <div class="card-actions" data-wave="${t.waveIndex}"></div>
+      <div class="card-actions" data-wave="${w}"></div>
     `;
 
     // Actions
     const actions = card.querySelector('.card-actions');
-    if (!t.passed && !t.locked && !isNuzlockeBlocked && currentUser) {
-      if (!t.claimedBy && pendingClaimWaves.has(t.waveIndex)) {
-        // Show claiming indicator
-        const claimingLabel = document.createElement('span');
-        claimingLabel.className = 'claiming-indicator';
-        claimingLabel.textContent = 'Claiming...';
-        actions.appendChild(claimingLabel);
-      } else if (!t.claimedBy) {
-        const quickBtn = document.createElement('button');
-        quickBtn.className = 'btn btn-small btn-accent';
-        quickBtn.textContent = 'Claim (???)';
-        quickBtn.title = 'Schnell claimen mit ??? und Standard-Team';
-        quickBtn.addEventListener('click', () => claimTrainer(t.waveIndex, true, null));
-        actions.appendChild(quickBtn);
-
-        const customBtn = document.createElement('button');
-        customBtn.className = 'btn btn-small';
-        customBtn.textContent = 'Anpassen';
-        customBtn.title = 'Sprite & Team anpassen';
-        customBtn.addEventListener('click', () => openClaimModal(t.waveIndex));
-        actions.appendChild(customBtn);
+    if (!isPassed && !isLocked && !isNuzlockeBlocked && !isFixed && currentUser) {
+      if (pendingClaimWaves.has(w)) {
+        actions.innerHTML = '<span class="claiming-indicator">Claiming...</span>';
+      } else if (!isClaimed) {
+        // Free wave or unclaimed trainer — claim button
+        const claimBtn = document.createElement('button');
+        claimBtn.className = 'btn btn-small btn-accent';
+        claimBtn.textContent = 'Claim';
+        claimBtn.addEventListener('click', () => claimTrainerWithProfile(w));
+        actions.appendChild(claimBtn);
       } else if (t.claimedBy === currentUser.id) {
+        // Own claim — edit buttons
         const editBtn = document.createElement('button');
         editBtn.className = 'btn btn-small';
         editBtn.textContent = 'Team';
@@ -719,44 +914,40 @@ function renderTrainers() {
         spriteBtn.textContent = 'Sprite';
         spriteBtn.addEventListener('click', () => openSpriteModal(t.waveIndex, t.spriteKey));
         actions.appendChild(spriteBtn);
-
-        const anonBtn = document.createElement('button');
-        anonBtn.className = 'btn btn-small' + (t.anonymous ? ' btn-accent' : '');
-        anonBtn.textContent = t.anonymous ? '??? (an)' : 'Name zeigen';
-        anonBtn.title = t.anonymous ? 'Name wird versteckt' : 'Als ??? anzeigen';
-        anonBtn.addEventListener('click', () => toggleAnonymous(t.waveIndex, !t.anonymous));
-        actions.appendChild(anonBtn);
       }
-      // Admin: unclaim button (streamer only)
-      if (t.claimedBy && isStreamer()) {
+      // Admin unclaim
+      if (isClaimed && isStreamer()) {
         const unclaimBtn = document.createElement('button');
         unclaimBtn.className = 'btn btn-small btn-danger';
-        unclaimBtn.textContent = 'Unclaim';
-        unclaimBtn.addEventListener('click', () => unclaimTrainer(t.waveIndex));
+        unclaimBtn.textContent = 'X';
+        unclaimBtn.title = 'Unclaim';
+        unclaimBtn.addEventListener('click', () => unclaimTrainer(w));
         actions.appendChild(unclaimBtn);
       }
     }
 
-    // Pokemon claim on dots
-    card.querySelectorAll('.party-dot').forEach(dot => {
-      dot.addEventListener('click', () => {
-        if (!currentUser || t.locked || t.passed || isNuzlockeBlocked) return;
-        const wave = parseInt(dot.dataset.wave);
-        const slot = parseInt(dot.dataset.slot);
-        claimPokemon(wave, slot);
-      });
-    });
-
     grid.appendChild(card);
   }
 }
+
+// (claimWaveWithProfile + insertTrainerWithProfile entfernt — alles über claimTrainerWithProfile)
 
 function isStreamer() {
   return currentUser && STREAMER_IDS.includes(currentUser.id);
 }
 
 // --- Actions ---
-function claimTrainer(wave, anonymous, spriteKey) {
+function claimTrainerWithProfile(wave) {
+  const p = loadProfile();
+  const lines = { intro: p.intro || '', victory: p.victory || '', defeat: p.defeat || '' };
+  // Find trainer data to get budget for this wave
+  const t = trainers.find(t => t.waveIndex === wave);
+  const budget = t?.budget || getInsertBudget(wave);
+  const presetTeam = getPresetForBudget(budget);
+  claimTrainer(wave, p.anonymous !== undefined ? p.anonymous : true, p.spriteKey || null, lines, presetTeam);
+}
+
+function claimTrainer(wave, anonymous, spriteKey, trainerLines, presetParty) {
   if (!currentUser || !sessionId) return;
   if (pendingClaimWaves.has(wave)) return; // already claiming
   pendingClaimWaves.add(wave);
@@ -768,6 +959,8 @@ function claimTrainer(wave, anonymous, spriteKey) {
     displayName: currentUser.display_name,
     anonymous: !!anonymous,
     spriteKey: spriteKey || null,
+    trainerLines: trainerLines || null,
+    presetParty: presetParty || null,
   });
 }
 
@@ -800,6 +993,8 @@ function toggleAnonymous(wave, anonymous) {
 
 // --- Team Editor ---
 function getEditMaxSlots() {
+  // Preset-Modus: immer 6 Slots
+  if (presetEditIndex >= 0) return 6;
   // Use originalParty length if available, otherwise budget-based slots
   if (editingTrainer?.originalParty?.length) return editingTrainer.originalParty.length;
   return getInsertMaxSlots(editBudget || getInsertBudget(editingWave));
@@ -942,6 +1137,16 @@ function addPokemonToParty(pokemon) {
 }
 
 function saveTeam() {
+  // Preset-Modus: in localStorage speichern
+  if (presetEditIndex >= 0) {
+    const party = editParty.filter(p => p);
+    savePreset(presetEditIndex, party);
+    showToast(`Preset ${presetEditIndex + 1} gespeichert! (${party.length} Pokemon)`);
+    presetEditIndex = -1;
+    closeTeamModal();
+    return;
+  }
+
   if (!currentUser || !sessionId || !editingWave) return;
 
   const maxSlots = getEditMaxSlots();
@@ -1019,7 +1224,7 @@ function openInsertModal() {
   const buffer = sessionConfig?.waveBuffer || 2;
   const minWave = currentWave + buffer + 1;
   let firstAvailable = null;
-  for (let w = minWave; w <= 200; w++) {
+  for (let w = minWave; w <= winWave; w++) {
     if (!isBlockedWave(w) && !trainers.find(t => t.waveIndex === w)) {
       firstAvailable = w;
       break;
@@ -1056,10 +1261,10 @@ function onInsertWaveChange() {
   const wave = parseInt(document.getElementById('insert-wave').value);
   const info = document.getElementById('insert-wave-info');
 
-  if (!wave || wave < 1 || wave > 200) {
+  if (!wave || wave < 1 || wave > winWave) {
     info.textContent = '';
     insertWave = null;
-    document.getElementById('insert-party-slots').innerHTML = '<p class="muted" style="text-align:center">Gültige Welle eingeben (1-200)</p>';
+    document.getElementById('insert-party-slots').innerHTML = `<p class="muted" style="text-align:center">Gültige Welle eingeben (1-${winWave})</p>`;
     return;
   }
 
@@ -1563,11 +1768,22 @@ function renderSpriteGrid(filter, currentSpriteKey) {
 }
 
 function selectSprite(spriteKey) {
+  // Profile mode: save sprite to profile, no claim
+  const modal = document.getElementById('sprite-modal');
+  if (modal.dataset.profileMode === 'true') {
+    renderProfileSprite(spriteKey);
+    modal.dataset.profileMode = '';
+    closeSpriteModal();
+    saveProfile(); // Auto-Save
+    return;
+  }
   if (!currentUser || !sessionId || !spriteModalWave) return;
   if (spriteModalClaimMode) {
-    // Claim with sprite
+    // Claim with sprite + profile lines
     const anonymous = document.getElementById('sprite-modal-anon')?.checked || false;
-    claimTrainer(spriteModalWave, anonymous, spriteKey);
+    const p = loadProfile();
+    const lines = { intro: p.intro || '', victory: p.victory || '', defeat: p.defeat || '' };
+    claimTrainer(spriteModalWave, anonymous, spriteKey, lines);
   } else {
     // Just change sprite
     socket.emit('COMMUNITY_CHANGE_SPRITE', {

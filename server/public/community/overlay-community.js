@@ -335,9 +335,9 @@ function renderTrainers() {
     return;
   }
 
-  // Sort by wave, show only next 4 upcoming trainers
+  // Sort by wave, show active + next 3 upcoming trainers
   const sorted = [...trainers].sort((a, b) => a.waveIndex - b.waveIndex);
-  const upcoming = sorted.filter(t => t.waveIndex > currentWave);
+  const upcoming = sorted.filter(t => t.waveIndex >= currentWave);
   const visible = upcoming.slice(0, 4);
 
   if (!visible.length) {
@@ -349,10 +349,16 @@ function renderTrainers() {
     const catClass = t.category || 'normal';
     const partySize = t.customParty ? t.customParty.length : (t.originalParty ? t.originalParty.length : 0);
     const claimed = !!t.claimedBy;
-    const locked = t.waveIndex <= currentWave + 2 && !claimed;
+    const isActive = t.waveIndex === currentWave;
+    const locked = t.waveIndex <= currentWave + 2 && !claimed && !isActive;
 
     let statusText, statusClass;
-    if (claimed) {
+    if (isActive) {
+      // Aktive Welle: Name immer revealen (auch bei anonym/surprise)
+      const realName = t.claimedBy ? (t.realName || t.claimedByName || '???') : null;
+      statusText = realName ? '@' + realName : 'JETZT';
+      statusClass = 'active';
+    } else if (claimed) {
       statusText = surpriseMode ? '???' : '@' + (t.claimedByName || '???');
       statusClass = 'claimed';
     } else if (locked) {

@@ -10,6 +10,7 @@ interface WaveCustomization {
   customParty: { speciesId: number; name: string; cost: number; shiny: boolean; nickname: string | null }[] | null;
   pokemonNicknames: Record<number, string>;
   isCustomInserted: boolean;
+  trainerLines?: { intro?: string; victory?: string; defeat?: string } | null;
 }
 
 interface ActiveGimmick {

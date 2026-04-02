@@ -63,11 +63,45 @@
         <div id="streamer-party" class="streamer-party"></div>
       </section>
 
+      <!-- Trainer Profile (Claim Defaults) -->
+      <section id="profile-section" style="display:none">
+        <h2>Dein Trainer-Profil</h2>
+        <div class="profile-bar">
+          <div class="profile-sprite" id="profile-sprite-preview" title="Sprite wählen" onclick="openProfileSpriteModal()">
+            <span class="profile-sprite-label">Sprite</span>
+          </div>
+          <div class="profile-fields">
+            <div class="profile-row">
+              <input type="text" id="profile-intro" maxlength="100" placeholder="Intro-Spruch...">
+              <input type="text" id="profile-victory" maxlength="100" placeholder="Sieg-Spruch...">
+              <input type="text" id="profile-defeat" maxlength="100" placeholder="Niederlage-Spruch...">
+            </div>
+            <div class="profile-row">
+              <label class="profile-toggle"><input type="checkbox" id="profile-anon" checked> Als ??? claimen</label>
+            </div>
+            <div class="profile-presets">
+              <span class="profile-presets-label">Teams:</span>
+              <div class="preset-card" id="preset-0" onclick="openPresetEditor(0)">
+                <span class="preset-card-title">Team 1</span>
+                <div class="preset-card-icons" id="preset-icons-0"><span class="preset-card-empty">leer</span></div>
+              </div>
+              <div class="preset-card" id="preset-1" onclick="openPresetEditor(1)">
+                <span class="preset-card-title">Team 2</span>
+                <div class="preset-card-icons" id="preset-icons-1"><span class="preset-card-empty">leer</span></div>
+              </div>
+              <div class="preset-card" id="preset-2" onclick="openPresetEditor(2)">
+                <span class="preset-card-title">Team 3</span>
+                <div class="preset-card-icons" id="preset-icons-2"><span class="preset-card-empty">leer</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Trainer Grid -->
       <section id="trainer-section">
         <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;">
-          <h2 style="margin:0;">Trainer zum Claimen</h2>
-          <button id="btn-insert-trainer" class="btn btn-small btn-accent" style="display:none;">+ Custom Trainer</button>
+          <h2 style="margin:0;">Wellen-Übersicht</h2>
         </div>
         <div id="trainer-grid" class="trainer-grid"></div>
         <p id="no-trainers" class="muted" style="text-align:center; padding:2rem;">Noch keine Trainer gemeldet. Warte auf den nächsten Kampf...</p>
@@ -155,29 +189,33 @@
 
     <!-- Team Editor Modal -->
     <div id="team-modal" class="modal" style="display:none">
-      <div class="modal-content" style="max-width:700px;">
-        <div class="modal-header">
+      <div class="modal-content" style="max-width:700px;max-height:90vh;display:flex;flex-direction:column;">
+        <div class="modal-header" style="flex-shrink:0;">
           <h3>Team bearbeiten — Welle <span id="modal-wave">0</span></h3>
           <button id="btn-close-modal" class="btn btn-small">X</button>
         </div>
-        <div class="modal-body">
-          <p class="muted" style="font-size:0.8rem;margin-bottom:0.75rem;">Suche ein Pokemon oder klicke im Grid. Budget = max. Gesamtkosten deines Teams.</p>
-          <div class="budget-bar">
-            <span>Budget: <span id="budget-current">0</span> / <span id="budget-max">0</span></span>
-            <div class="budget-fill" id="budget-fill"></div>
+        <div class="modal-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+          <div style="flex-shrink:0;">
+            <div class="budget-bar">
+              <span>Budget: <span id="budget-current">0</span> / <span id="budget-max">0</span></span>
+              <div class="budget-fill" id="budget-fill"></div>
+            </div>
+            <div id="party-slots"></div>
+            <div style="display:flex;gap:6px;margin-bottom:0.5rem;flex-wrap:wrap;">
+              <button id="btn-random-team" class="btn btn-accent" style="flex:1;min-width:100px;">Random</button>
+              <button id="btn-load-last-team" class="btn" style="flex:1;min-width:100px;">Letztes Team</button>
+              <button id="btn-load-preset-0" class="btn" style="flex:1;min-width:70px;" onclick="loadPresetIntoEditor(0)">Team 1</button>
+              <button id="btn-load-preset-1" class="btn" style="flex:1;min-width:70px;" onclick="loadPresetIntoEditor(1)">Team 2</button>
+              <button id="btn-load-preset-2" class="btn" style="flex:1;min-width:70px;" onclick="loadPresetIntoEditor(2)">Team 3</button>
+            </div>
+            <div class="pokemon-search">
+              <input type="text" id="pokemon-search" placeholder="Pokemon suchen..." autocomplete="off">
+              <div id="pokemon-suggestions" class="suggestions" style="display:none"></div>
+            </div>
           </div>
-          <div id="party-slots"></div>
-          <div style="display:flex;gap:6px;margin-bottom:0.75rem;flex-wrap:wrap;">
-            <button id="btn-random-team" class="btn btn-accent" style="flex:1;min-width:140px;">&#127922; Random Team</button>
-            <button id="btn-load-last-team" class="btn" style="flex:1;min-width:140px;">&#128190; Letztes Team laden</button>
-          </div>
-          <div class="pokemon-search">
-            <input type="text" id="pokemon-search" placeholder="Pokemon suchen oder durchs Grid scrollen..." autocomplete="off">
-            <div id="pokemon-suggestions" class="suggestions" style="display:none"></div>
-          </div>
-          <div id="pokemon-grid" style="max-height:400px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:4px;margin-top:8px;padding:4px;border:1px solid var(--border,#333);border-radius:8px;background:rgba(0,0,0,0.2);"></div>
+          <div id="pokemon-grid" style="flex:1;min-height:150px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:4px;margin-top:8px;padding:4px;border:1px solid var(--border,#333);border-radius:8px;background:rgba(0,0,0,0.2);"></div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" style="flex-shrink:0;">
           <button id="btn-save-team" class="btn btn-accent">Speichern</button>
           <button id="btn-cancel-team" class="btn">Abbrechen</button>
         </div>

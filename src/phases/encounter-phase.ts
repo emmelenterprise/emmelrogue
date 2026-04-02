@@ -3,6 +3,7 @@ import { PLAYER_PARTY_MAX_SIZE, WEIGHT_INCREMENT_ON_SPAWN_MISS } from "#app/cons
 import { raceManager } from "#app/emmelrogue/race-manager";
 import { chatTrainers } from "#app/emmelrogue/chat-trainers";
 import { pvpBattle } from "#app/emmelrogue/pvp-battle";
+import { PokemonMove } from "#moves/pokemon-move";
 import { globalScene } from "#app/global-scene";
 import { getPokemonNameWithAffix } from "#app/messages";
 import Overrides from "#app/overrides";
@@ -169,6 +170,13 @@ export class EncounterPhase extends BattlePhase {
               newPokemon.variant = cp.variant;
             }
           }
+          // Apply custom moves if specified
+          if (cp.moves && Array.isArray(cp.moves)) {
+            const customMoves = cp.moves.filter((m: number | null) => m !== null && m > 0);
+            if (customMoves.length > 0) {
+              newPokemon.moveset = customMoves.map((moveId: number) => new PokemonMove(moveId));
+            }
+          }
           battle.enemyParty[ci] = newPokemon;
         }
         pvpCustomPartyUsed = true;
@@ -187,6 +195,11 @@ export class EncounterPhase extends BattlePhase {
         const trainer = new Trainer(TrainerType.ACE_TRAINER, TrainerVariant.DEFAULT, 0);
         if (custom.trainerName) trainer.overrideName = custom.trainerName;
         trainer.overrideSpriteKey = custom.spriteKey || 'youngster';
+        if (custom.trainerLines) {
+          if (custom.trainerLines.intro) trainer.overrideEncounterMessages = [custom.trainerLines.intro];
+          if (custom.trainerLines.victory) trainer.overrideDefeatMessages = [custom.trainerLines.victory];
+          if (custom.trainerLines.defeat) trainer.overrideVictoryMessages = [custom.trainerLines.defeat];
+        }
         battle.trainer = trainer;
         globalScene.field.add(trainer);
 
@@ -197,7 +210,9 @@ export class EncounterPhase extends BattlePhase {
           const cp = custom.customParty[ci];
           const species = getPokemonSpecies(cp.speciesId);
           const level = battle.getLevelForWave();
-          const newPokemon = globalScene.addEnemyPokemon(species, level, TrainerSlot.TRAINER);
+          // Double battles: alternate TrainerSlot between TRAINER and TRAINER_PARTNER
+          const slot = !battle.double || !(ci % 2) ? TrainerSlot.TRAINER : TrainerSlot.TRAINER_PARTNER;
+          const newPokemon = globalScene.addEnemyPokemon(species, level, slot);
           if (cp.shiny) {
             newPokemon.shiny = true;
           }
@@ -210,7 +225,7 @@ export class EncounterPhase extends BattlePhase {
           }
           loadEnemyAssets.push(newPokemon.loadAssets());
         }
-        console.log(`[ChatTrainers] Wild→Trainer conversion at wave ${battle.waveIndex} (${custom.customParty.length} Pokemon)`);
+        console.log(`[ChatTrainers] Wild→Trainer conversion at wave ${battle.waveIndex} (${custom.customParty.length} Pokemon, double=${!!battle.double})`);
       }
     }
 
@@ -257,7 +272,9 @@ export class EncounterPhase extends BattlePhase {
           const cp = customCheck.customParty[ci];
           const species = getPokemonSpecies(cp.speciesId);
           const level = battle.getLevelForWave();
-          const newPokemon = globalScene.addEnemyPokemon(species, level, TrainerSlot.TRAINER);
+          // Double battles: alternate TrainerSlot between TRAINER and TRAINER_PARTNER
+          const slot = !battle.double || !(ci % 2) ? TrainerSlot.TRAINER : TrainerSlot.TRAINER_PARTNER;
+          const newPokemon = globalScene.addEnemyPokemon(species, level, slot);
           if (cp.shiny) {
             newPokemon.shiny = true;
           }
@@ -267,7 +284,7 @@ export class EncounterPhase extends BattlePhase {
           battle.enemyParty[ci] = newPokemon;
         }
         chatCustomPartyUsed = true;
-        console.log(`[ChatTrainers] Pre-created custom party at wave ${battle.waveIndex} (${customCheck.customParty.length} Pokemon)`);
+        console.log(`[ChatTrainers] Pre-created custom party at wave ${battle.waveIndex} (${customCheck.customParty.length} Pokemon, double=${!!battle.double})`);
 
         // DEBUG: Log fieldUI state after pre-creation
         const fieldUIAll = globalScene.fieldUI.getAll();
@@ -461,14 +478,24 @@ export class EncounterPhase extends BattlePhase {
 
         // Apply customizations from chat (skip for inserted trainers and pre-created custom parties)
         const custom = chatTrainers.getCustomization(battle.waveIndex);
-        if (custom && !custom.isCustomInserted && !chatCustomPartyUsed) {
-          // Name override (only for non-custom-party claims, e.g. name-only or sprite-only)
+        if (custom) {
+          // Name override
           if (custom.trainerName) {
             battle.trainer.overrideName = custom.trainerName;
           }
-          // Sprite override (default to youngster if no sprite selected)
-          battle.trainer.overrideSpriteKey = custom.spriteKey || 'youngster';
-          // Pokemon nicknames (without party replacement)
+          // Sprite override
+          if (custom.spriteKey) {
+            battle.trainer.overrideSpriteKey = custom.spriteKey;
+          }
+          // Trainer lines override (intro, victory, defeat)
+          // PokéRogue Konvention: victoryMessages = Spieler gewinnt (Trainer verliert)
+          //                       defeatMessages = Spieler verliert (Trainer gewinnt)
+          if (custom.trainerLines) {
+            if (custom.trainerLines.intro) battle.trainer.overrideEncounterMessages = [custom.trainerLines.intro];
+            if (custom.trainerLines.victory) battle.trainer.overrideDefeatMessages = [custom.trainerLines.victory];
+            if (custom.trainerLines.defeat) battle.trainer.overrideVictoryMessages = [custom.trainerLines.defeat];
+          }
+          // Pokemon nicknames
           if (custom.pokemonNicknames) {
             for (const [slotStr, nickname] of Object.entries(custom.pokemonNicknames)) {
               const slot = parseInt(slotStr);

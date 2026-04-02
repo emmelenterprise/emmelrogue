@@ -100,6 +100,43 @@ let chatSessionFromUrl = '';
     luckLevelSelect.disabled = false;
   }
 
+  // Restore last settings from localStorage (host only)
+  // Only restore UI values here — config update is sent after socket joins the race
+  if (isHost) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('emmelrogue_race_settings') || '{}');
+      if (saved.starterMode) starterModeSelect.value = saved.starterMode;
+      if (saved.starterCount) starterCountSelect.value = saved.starterCount;
+      if (saved.gameMode) gameModeSelect.value = saved.gameMode;
+      if (saved.winCondition) winConditionSelect.value = saved.winCondition;
+      if (saved.winWave) winWaveInput.value = saved.winWave;
+      if (saved.nuzlockeDeath !== undefined) nuzlockeDeathCb.checked = saved.nuzlockeDeath;
+      if (saved.nuzlockeCatch !== undefined) nuzlockeCatchCb.checked = saved.nuzlockeCatch;
+      if (saved.respawnOnWipe !== undefined) respawnWipeCb.checked = saved.respawnOnWipe;
+      if (saved.shinyMode) shinyModeSelect.value = saved.shinyMode;
+      if (saved.luckLevel !== undefined) luckLevelSelect.value = saved.luckLevel;
+      updateStarterCountVisibility();
+      updateWaveFieldVisibility();
+      // Send config after socket has joined the race (1s delay for safety)
+      setTimeout(() => {
+        const wc = winConditionSelect.value;
+        socket.emit('RACE_CONFIG_UPDATE', {
+          code: raceCode,
+          starterMode: starterModeSelect.value,
+          gameMode: gameModeSelect.value,
+          winCondition: wc === 'wave100' ? 'wave' : wc === 'wave200' ? 'wave' : 'wave',
+          winWave: parseInt(winWaveInput.value) || 20,
+          nuzlockeDeath: nuzlockeDeathCb.checked,
+          nuzlockeCatch: nuzlockeCatchCb.checked,
+          starterCount: parseInt(starterCountSelect.value) || 3,
+          respawnOnWipe: respawnWipeCb.checked,
+          shinyMode: shinyModeSelect.value,
+          luckLevel: parseInt(luckLevelSelect.value),
+        });
+      }, 1000);
+    } catch {}
+  }
+
   // Solo mode: hide P2 slot + VS
   if (isSolo) {
     // Hide P2 info in players bar
@@ -422,9 +459,27 @@ function updateReadyButton() {
 }
 
 // --- Host Config Events ---
+function saveRaceSettings() {
+  try {
+    localStorage.setItem('emmelrogue_race_settings', JSON.stringify({
+      starterMode: starterModeSelect.value,
+      starterCount: starterCountSelect.value,
+      gameMode: gameModeSelect.value,
+      winCondition: winConditionSelect.value,
+      winWave: winWaveInput.value,
+      nuzlockeDeath: nuzlockeDeathCb.checked,
+      nuzlockeCatch: nuzlockeCatchCb.checked,
+      respawnOnWipe: respawnWipeCb.checked,
+      shinyMode: shinyModeSelect.value,
+      luckLevel: luckLevelSelect.value,
+    }));
+  } catch {}
+}
+
 starterModeSelect.addEventListener('change', () => {
   if (!isHost) return;
   updateStarterCountVisibility();
+  saveRaceSettings();
   socket.emit('RACE_CONFIG_UPDATE', {
     code: raceCode,
     starterMode: starterModeSelect.value,
@@ -433,35 +488,20 @@ starterModeSelect.addEventListener('change', () => {
 
 gameModeSelect.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    gameMode: gameModeSelect.value,
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, gameMode: gameModeSelect.value });
 });
 
 winConditionSelect.addEventListener('change', () => {
   if (!isHost) return;
   const val = winConditionSelect.value;
   updateWaveFieldVisibility();
-
-  // Map presets to winCondition + winWave
   let winCondition = val;
   let winWave = undefined;
-  if (val === 'wave100') {
-    winCondition = 'wave';
-    winWave = 100;
-    winWaveInput.value = 100;
-  } else if (val === 'wave200') {
-    winCondition = 'wave';
-    winWave = 200;
-    winWaveInput.value = 200;
-  }
-
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    winCondition,
-    ...(winWave !== undefined ? { winWave } : {}),
-  });
+  if (val === 'wave100') { winCondition = 'wave'; winWave = 100; winWaveInput.value = 100; }
+  else if (val === 'wave200') { winCondition = 'wave'; winWave = 200; winWaveInput.value = 200; }
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, winCondition, ...(winWave !== undefined ? { winWave } : {}) });
 });
 
 let waveDebounce = null;
@@ -469,65 +509,45 @@ winWaveInput.addEventListener('input', () => {
   if (!isHost) return;
   clearTimeout(waveDebounce);
   waveDebounce = setTimeout(() => {
-    socket.emit('RACE_CONFIG_UPDATE', {
-      code: raceCode,
-      winWave: parseInt(winWaveInput.value) || 20,
-    });
+    saveRaceSettings();
+    socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, winWave: parseInt(winWaveInput.value) || 20 });
   }, 500);
 });
 
-// Starter count
 starterCountSelect.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    starterCount: parseInt(starterCountSelect.value) || 3,
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, starterCount: parseInt(starterCountSelect.value) || 3 });
 });
 
-// Nuzlocke death
 nuzlockeDeathCb.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    nuzlockeDeath: nuzlockeDeathCb.checked,
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, nuzlockeDeath: nuzlockeDeathCb.checked });
 });
 
-// Nuzlocke catch
 nuzlockeCatchCb.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    nuzlockeCatch: nuzlockeCatchCb.checked,
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, nuzlockeCatch: nuzlockeCatchCb.checked });
 });
 
-// Respawn on wipe
 respawnWipeCb.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    respawnOnWipe: respawnWipeCb.checked,
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, respawnOnWipe: respawnWipeCb.checked });
 });
 
-// Shiny mode
 shinyModeSelect.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    shinyMode: shinyModeSelect.value,
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, shinyMode: shinyModeSelect.value });
 });
 
-// Luck level
 luckLevelSelect.addEventListener('change', () => {
   if (!isHost) return;
-  socket.emit('RACE_CONFIG_UPDATE', {
-    code: raceCode,
-    luckLevel: parseInt(luckLevelSelect.value),
-  });
+  saveRaceSettings();
+  socket.emit('RACE_CONFIG_UPDATE', { code: raceCode, luckLevel: parseInt(luckLevelSelect.value) });
 });
 
 // --- Ready ---

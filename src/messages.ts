@@ -23,6 +23,10 @@ export function getPokemonNameWithAffix(pokemon: Pokemon | undefined, useIllusio
 
   // Even though the final boss is a "wild"/"trainerless" Pokemon, it uses "Foe" instead of "Wild"
   const useFoePrefix = globalScene.currentBattle.battleSpec === BattleSpec.FINAL_BOSS || pokemon.hasTrainer();
+  // Chat feature: use trainer's override name instead of "Gegner"/"Foe"
+  if (useFoePrefix && globalScene.currentBattle.trainer?.overrideName) {
+    return `${pokemonName} (${globalScene.currentBattle.trainer.overrideName})`;
+  }
   const i18nkey = useFoePrefix ? "battle:foePokemonWithAffix" : "battle:wildPokemonWithAffix";
   return i18next.t(i18nkey, { pokemonName });
 }

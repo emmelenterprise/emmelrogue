@@ -323,6 +323,8 @@ html, body {
 .co-trainer-status.free { color: var(--green); }
 .co-trainer-status.claimed { color: var(--neon); }
 .co-trainer-status.locked { color: var(--text-muted); }
+.co-trainer-status.active { color: #f59e0b; font-weight: bold; animation: activePulse 1.5s ease-in-out infinite; }
+@keyframes activePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* Category colors on wave badge */
 .co-trainer-wave.boss { background: #dc2626; }

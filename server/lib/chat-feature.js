@@ -2,6 +2,41 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
+// --- Content Moderation (from emmel.tv) ---
+let moderationBlocklist = [];
+async function loadModerationBlocklist() {
+  try {
+    const res = await fetch('http://127.0.0.1:3000/api/moderation/settings');
+    if (res.ok) {
+      const data = await res.json();
+      // Default + Custom blocklist combined
+      const disabled = data.disabledWords || [];
+      moderationBlocklist = [
+        ...(data.defaultBlocklist || []).filter(w => !disabled.includes(w)),
+        ...(data.customBlocklist || []).filter(w => !disabled.includes(w)),
+      ];
+      console.log(`[Chat] Moderation blocklist loaded: ${moderationBlocklist.length} words`);
+    }
+  } catch { console.log('[Chat] Moderation blocklist not available, using empty list'); }
+}
+// Load on startup
+loadModerationBlocklist();
+
+function moderateText(text) {
+  if (!text || !moderationBlocklist.length) return text;
+  const leetMap = { '0':'o','1':'i','2':'z','3':'e','4':'a','5':'s','6':'g','7':'t','8':'b','9':'g','@':'a','!':'i','$':'s' };
+  const lower = text.toLowerCase().replace(/[0-9@!$]/g, c => leetMap[c] || c);
+  const stripped = lower.replace(/\s+/g, '');
+  for (const word of moderationBlocklist) {
+    if (!word || word.length < 2) continue;
+    const w = word.toLowerCase().trim();
+    if (lower.includes(w) || stripped.includes(w.replace(/\s+/g, ''))) {
+      return '...'; // blocked
+    }
+  }
+  return text;
+}
+
 // Load pokemon data for budget validation
 const pokemonData = JSON.parse(
   fs.readFileSync(path.join(__dirname, '..', 'data', 'pokemon-data.json'), 'utf-8')
@@ -203,7 +238,7 @@ function formatTrigger(trigger) {
 }
 
 // --- Session Management ---
-function createSession(seed, raceCode) {
+function createSession(seed, raceCode, winWave) {
   const sessionId = crypto.randomBytes(8).toString('hex');
   const code = generateSessionCode();
   const session = {
@@ -211,6 +246,7 @@ function createSession(seed, raceCode) {
     code,
     seed,
     raceCode: raceCode || null,
+    winWave: winWave || 200,
     status: 'active',
     currentWave: 0,
     currentBiome: '',
@@ -274,6 +310,7 @@ function getAllSessions() {
       currentBiome: session.currentBiome,
       trainerCount: session.trainers.size,
       claimCount: [...session.trainerClaims.values()].reduce((sum, arr) => sum + arr.length, 0),
+      winWave: session.winWave || 200,
       streamerParty: session.streamerParty || [],
       nuzlockeCatch: session.nuzlockeCatch || false,
       createdAt: session.createdAt,
@@ -360,7 +397,7 @@ function findNextAvailableWave(session, startWave) {
   return candidates.length > 0 ? candidates[0] : null;
 }
 
-function claimTrainer(sessionId, waveIndex, twitchUserId, displayName, anonymous, spriteKey) {
+function claimTrainer(sessionId, waveIndex, twitchUserId, displayName, anonymous, spriteKey, trainerLines, presetParty) {
   const session = gameSessions.get(sessionId);
   if (!session) return { success: false, error: 'Session nicht gefunden' };
   if (session.status !== 'active') return { success: false, error: 'Session nicht aktiv' };
@@ -370,8 +407,29 @@ function claimTrainer(sessionId, waveIndex, twitchUserId, displayName, anonymous
     return { success: false, error: 'Nuzlocke: Welle X1 ist für den ersten Fang reserviert!' };
   }
 
+  // winWave Limit — keine Claims jenseits der Siegbedingung
+  if (session.winWave && waveIndex > session.winWave) {
+    return { success: false, error: `Welle ${waveIndex} liegt über dem Limit (${session.winWave})` };
+  }
+
   let trainer = session.trainers.get(waveIndex);
-  if (!trainer) return { success: false, error: 'Kein Trainer bei dieser Welle' };
+  // Kein Trainer? Automatisch Custom Trainer erstellen (wild → trainer)
+  if (!trainer) {
+    if (!session.config.allowCustomTrainers) {
+      return { success: false, error: 'Custom Trainer sind deaktiviert' };
+    }
+    const budget = getCustomBudget(waveIndex, session);
+    const trigger = session.config.categoryTriggers['custom'] || { type: 'free', amount: 0 };
+    trainer = {
+      waveIndex, trainerType: -1, trainerClass: 'Custom',
+      spriteKey: '', variant: 0, isFixed: false, isBoss: false,
+      isCustomInserted: true, biome: session.currentBiome, category: 'custom',
+      originalParty: [], budget, claimedBy: null, claimedByName: null,
+      customSprite: null, customParty: null, pokemonNicknames: {},
+      anonymous: false, trainerLines: null, triggerType: trigger.type, triggerAmount: trigger.amount,
+    };
+    session.trainers.set(waveIndex, trainer);
+  }
 
   // Wave buffer check — if too close/passed, try to find next available slot
   if (waveIndex <= session.currentWave + session.config.waveBuffer || trainer.claimedBy) {
@@ -413,10 +471,46 @@ function claimTrainer(sessionId, waveIndex, twitchUserId, displayName, anonymous
   trainer.claimedBy = twitchUserId;
   trainer.claimedByName = displayName;
   trainer.anonymous = !!anonymous;
-  trainer.customSprite = spriteKey || 'youngster'; // Default to youngster if no sprite selected
+  // Default Sprite: übergebenes Sprite, oder Random aus der Liste
+  const defaultSprites = ['youngster_m', 'lass', 'hiker', 'beauty', 'ranger_m', 'ranger_f', 'ace_trainer_m', 'ace_trainer_f', 'psychic_m', 'psychic_f'];
+  trainer.customSprite = spriteKey || defaultSprites[Math.floor(Math.random() * defaultSprites.length)];
+  // Trainer-Sprüche mit Moderation filtern
+  const rawLines = trainerLines || { intro: '', victory: '', defeat: '' };
+  trainer.trainerLines = {
+    intro: moderateText(rawLines.intro) ?? '',
+    victory: moderateText(rawLines.victory) ?? '',
+    defeat: moderateText(rawLines.defeat) ?? '',
+  };
 
-  // Set original party as default custom party (user can modify later)
-  if (trainer.originalParty && trainer.originalParty.length > 0 && !trainer.customParty) {
+  // Preset-Party vom Client: Budget-Check, dann als Custom-Party setzen
+  if (presetParty && Array.isArray(presetParty) && presetParty.length > 0) {
+    const budget = trainer.budget || getCustomBudget(waveIndex, session);
+    const maxSlots = getCustomPartySize(budget);
+    // Trim to budget: take pokemon from front until budget exhausted
+    const fitted = [];
+    let remaining = budget;
+    for (const p of presetParty) {
+      const cost = pokemonData[String(p.speciesId)]?.cost || p.cost || 0;
+      if (cost <= remaining && fitted.length < maxSlots) {
+        fitted.push({
+          speciesId: p.speciesId,
+          name: pokemonData[String(p.speciesId)]?.name_de || pokemonData[String(p.speciesId)]?.name || p.name || 'Unknown',
+          cost,
+          shiny: false,
+          nickname: null,
+          nicknameBy: null,
+        });
+        remaining -= cost;
+      }
+    }
+    if (fitted.length > 0) {
+      trainer.customParty = fitted;
+      console.log(`[Chat] Preset team applied for wave ${waveIndex}: ${fitted.length} pokemon (${budget - remaining}/${budget} budget)`);
+    }
+  }
+
+  // Set original party as default custom party (if no preset applied)
+  if (!trainer.customParty && trainer.originalParty && trainer.originalParty.length > 0) {
     trainer.customParty = trainer.originalParty.map(p => ({
       speciesId: p.speciesId,
       name: pokemonData[String(p.speciesId)]?.name_de || pokemonData[String(p.speciesId)]?.name || p.name || 'Unknown',
@@ -427,7 +521,7 @@ function claimTrainer(sessionId, waveIndex, twitchUserId, displayName, anonymous
     }));
   }
 
-  // Fallback: if no party, generate a random team within budget
+  // Fallback: if still no party, generate a random team within budget
   if (!trainer.customParty || trainer.customParty.length === 0) {
     const budget = trainer.budget || getCustomBudget(waveIndex, session);
     trainer.customParty = generateRandomParty(budget);
@@ -607,7 +701,7 @@ function claimPokemon(sessionId, waveIndex, slot, twitchUserId, displayName) {
 }
 
 // --- Custom Trainer (Wild → Trainer) ---
-function insertCustomTrainer(sessionId, waveIndex, twitchUserId, displayName, spriteKey, party, anonymous) {
+function insertCustomTrainer(sessionId, waveIndex, twitchUserId, displayName, spriteKey, party, anonymous, trainerLines) {
   const session = gameSessions.get(sessionId);
   if (!session) return { success: false, error: 'Session nicht gefunden' };
 
@@ -692,9 +786,20 @@ function insertCustomTrainer(sessionId, waveIndex, twitchUserId, displayName, sp
     })),
     pokemonNicknames: {},
     anonymous: !!anonymous,
+    trainerLines: {
+      intro: moderateText((trainerLines?.intro) || '') ?? '',
+      victory: moderateText((trainerLines?.victory) || '') ?? '',
+      defeat: moderateText((trainerLines?.defeat) || '') ?? '',
+    },
     triggerType: trigger.type,
     triggerAmount: trigger.amount,
   };
+
+  // Default sprite from pool if none selected
+  if (!entry.customSprite || entry.customSprite === 'youngster') {
+    const defaultSprites = ['youngster_m', 'lass', 'hiker', 'beauty', 'ranger_m', 'ranger_f', 'ace_trainer_m', 'ace_trainer_f', 'psychic_m', 'psychic_f'];
+    entry.customSprite = spriteKey || defaultSprites[Math.floor(Math.random() * defaultSprites.length)];
+  }
 
   session.trainers.set(waveIndex, entry);
   const userClaims = session.trainerClaims.get(twitchUserId) || [];
@@ -710,8 +815,10 @@ function getVisibleTrainers(sessionId) {
   const session = gameSessions.get(sessionId);
   if (!session) return [];
 
+  const maxWave = session.winWave || 200;
   const result = [];
   for (const [wave, trainer] of session.trainers) {
+    if (wave > maxWave) continue;
     result.push({
       waveIndex: wave,
       trainerClass: trainer.trainerClass,
@@ -726,7 +833,9 @@ function getVisibleTrainers(sessionId) {
       pokemonNicknames: trainer.pokemonNicknames,
       claimedBy: trainer.claimedBy,
       claimedByName: trainer.anonymous ? '???' : trainer.claimedByName,
+      realName: trainer.claimedByName || null,
       anonymous: trainer.anonymous,
+      trainerLines: trainer.trainerLines || null,
       triggerType: trainer.triggerType,
       triggerAmount: trainer.triggerAmount,
       locked: wave <= session.currentWave + session.config.waveBuffer,
@@ -778,6 +887,7 @@ function getCustomization(sessionId, waveIndex) {
     customParty: trainer.customParty,
     pokemonNicknames: trainer.pokemonNicknames,
     isCustomInserted: trainer.isCustomInserted,
+    trainerLines: trainer.trainerLines || null,
   };
 }
 
