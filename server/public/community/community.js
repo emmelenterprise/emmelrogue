@@ -532,6 +532,23 @@ function setupSocket() {
     }
   });
 
+  socket.on('CHAT_LINES_UPDATED', (data) => {
+    const t = trainers.find(t => t.waveIndex === data.wave);
+    if (t) {
+      t.trainerLines = data.trainerLines;
+      renderTrainers();
+    }
+  });
+
+  socket.on('COMMUNITY_LINES_RESULT', (data) => {
+    if (data.success) {
+      showToast('Sprüche gespeichert!');
+      document.getElementById('lines-modal').style.display = 'none';
+    } else {
+      showToast(data.error || 'Fehler beim Speichern', 'error');
+    }
+  });
+
   socket.on('CHAT_VOTE_UPDATE', (data) => {
     activeVote = data;
     renderVote();
@@ -752,6 +769,15 @@ function setupUI() {
     renderSpriteGrid(e.target.value, trainer?.spriteKey);
   });
 
+  // Lines (Sprüche) modal
+  document.getElementById('btn-close-lines').addEventListener('click', () => {
+    document.getElementById('lines-modal').style.display = 'none';
+  });
+  document.getElementById('lines-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'lines-modal') document.getElementById('lines-modal').style.display = 'none';
+  });
+  document.getElementById('btn-save-lines').addEventListener('click', saveLinesModal);
+
   // Insert trainer modal
   // btn-insert-trainer entfernt — alle Wellen sind direkt im Grid claimbar
   document.getElementById('btn-close-insert').addEventListener('click', closeInsertModal);
@@ -914,6 +940,12 @@ function renderTrainers() {
         spriteBtn.textContent = 'Sprite';
         spriteBtn.addEventListener('click', () => openSpriteModal(t.waveIndex, t.spriteKey));
         actions.appendChild(spriteBtn);
+
+        const linesBtn = document.createElement('button');
+        linesBtn.className = 'btn btn-small';
+        linesBtn.textContent = 'Sprüche';
+        linesBtn.addEventListener('click', () => openLinesModal(t));
+        actions.appendChild(linesBtn);
       }
       // Admin unclaim
       if (isClaimed && isStreamer()) {
@@ -1688,6 +1720,36 @@ function activateGimmick() {
 let spriteModalWave = null;
 let spriteModalClaimMode = false; // true = claiming, false = just changing sprite
 let pendingClaimCustomize = false; // true = open team editor after claim
+
+// --- Lines (Sprüche) Modal ---
+let linesModalWave = null;
+
+function openLinesModal(trainer) {
+  linesModalWave = trainer.waveIndex;
+  const lines = trainer.trainerLines || {};
+  // Vorausfüllen: claim-spezifische Sprüche, Fallback auf Profil-Sprüche
+  const p = loadProfile();
+  document.getElementById('lines-modal-wave').textContent = trainer.waveIndex;
+  document.getElementById('lines-intro').value = lines.intro || p.intro || '';
+  document.getElementById('lines-victory').value = lines.victory || p.victory || '';
+  document.getElementById('lines-defeat').value = lines.defeat || p.defeat || '';
+  document.getElementById('lines-modal').style.display = 'flex';
+}
+
+function saveLinesModal() {
+  if (!linesModalWave || !currentUser || !sessionId) return;
+  const trainerLines = {
+    intro: document.getElementById('lines-intro').value.trim(),
+    victory: document.getElementById('lines-victory').value.trim(),
+    defeat: document.getElementById('lines-defeat').value.trim(),
+  };
+  socket.emit('COMMUNITY_UPDATE_LINES', {
+    sessionId,
+    wave: linesModalWave,
+    twitchUserId: currentUser.id,
+    trainerLines,
+  });
+}
 
 function openSpriteModal(waveIndex, currentSpriteKey) {
   spriteModalWave = waveIndex;

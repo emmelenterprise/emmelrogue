@@ -1586,6 +1586,22 @@ io.on('connection', (socket) => {
   });
 
   // Community Page: claim pokemon nickname
+  socket.on('COMMUNITY_UPDATE_LINES', ({ sessionId, wave, twitchUserId, trainerLines }) => {
+    if (!sessionId || !wave || !twitchUserId) return;
+    const result = chatFeature.updateTrainerLines(sessionId, parseInt(wave), twitchUserId, trainerLines);
+    if (result.success) {
+      io.to(`chat:${sessionId}`).emit('CHAT_LINES_UPDATED', {
+        wave: parseInt(wave),
+        trainerLines: result.trainerLines,
+      });
+      const custom = chatFeature.getCustomization(sessionId, parseInt(wave));
+      if (custom) {
+        io.to(`chat:${sessionId}`).emit('CHAT_CUSTOMIZATION', custom);
+      }
+    }
+    socket.emit('COMMUNITY_LINES_RESULT', result);
+  });
+
   socket.on('COMMUNITY_CLAIM_POKEMON', ({ sessionId, wave, slot, twitchUserId, displayName }) => {
     if (!sessionId || wave === undefined || slot === undefined || !twitchUserId) return;
     const result = chatFeature.claimPokemon(sessionId, parseInt(wave), parseInt(slot), twitchUserId, displayName || twitchUserId);
@@ -1814,6 +1830,19 @@ io.on('connection', (socket) => {
     // Clear battle state
     session.activeBattleId = null;
     session.revealedBossSlots = [];
+
+    // Notify gym clients that battle ended + next challenger auto-advanced
+    io.to('gym').emit('GYM_BATTLE_ENDED', {
+      battleId,
+      winner,
+      reason,
+      challengerName: challenger.displayName,
+      challengerId: challenger.twitchId,
+      nextChallenger: session.currentChallenger ? {
+        displayName: session.currentChallenger.displayName,
+        twitchId: session.currentChallenger.twitchId,
+      } : null,
+    });
     io.to('gym').emit('GYM_STATE', gymLeader.getState());
   });
 
@@ -1972,13 +2001,7 @@ io.on('connection', (socket) => {
 setInterval(() => {
   const now = Date.now();
   for (const [code, race] of races) {
-    // Remove started races older than 3 hours
-    if (race.startedAt && now - race.startedAt > 3 * 60 * 60 * 1000) {
-      races.delete(code);
-      io.to(`race:${code}`).emit('RACE_ENDED', { reason: 'Race timeout' });
-      console.log(`[Race] ${code} cleaned up (started >3h ago)`);
-      continue;
-    }
+    // Gestartete Races laufen unbegrenzt — kein Timeout
     // Remove unstarted races (waiting/menu) older than 15 minutes
     if (!race.startedAt && race.createdAt && now - race.createdAt > 15 * 60 * 1000) {
       races.delete(code);

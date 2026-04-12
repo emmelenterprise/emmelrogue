@@ -284,6 +284,28 @@
       </div>
     </div>
 
+    <!-- Lines (Sprüche) Modal -->
+    <div id="lines-modal" class="modal" style="display:none">
+      <div class="modal-content" style="max-width:500px">
+        <div class="modal-header">
+          <h3>Sprüche bearbeiten — Welle <span id="lines-modal-wave">0</span></h3>
+          <button id="btn-close-lines" class="btn btn-small">X</button>
+        </div>
+        <div class="modal-body">
+          <label for="lines-intro">Intro-Spruch</label>
+          <input type="text" id="lines-intro" placeholder="Was sagt dein Trainer vor dem Kampf?" maxlength="200" style="width:100%;margin-bottom:12px;">
+          <label for="lines-victory">Sieg-Spruch</label>
+          <input type="text" id="lines-victory" placeholder="Was sagt er wenn er gewinnt?" maxlength="200" style="width:100%;margin-bottom:12px;">
+          <label for="lines-defeat">Niederlage-Spruch</label>
+          <input type="text" id="lines-defeat" placeholder="Was sagt er wenn er verliert?" maxlength="200" style="width:100%;">
+          <p class="muted" style="margin-top:8px;">Diese Sprüche gelten nur für diesen einen Claim, nicht für dein Profil.</p>
+        </div>
+        <div class="modal-footer" style="padding:12px 20px;display:flex;gap:8px;justify-content:flex-end;">
+          <button id="btn-save-lines" class="btn btn-accent">Speichern</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Share/Link bar at bottom -->
     <div id="share-bar" style="display:none">
       <span>Teile diesen Link:</span>

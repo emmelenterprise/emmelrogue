@@ -647,6 +647,31 @@ function changeSprite(sessionId, waveIndex, twitchUserId, spriteKey) {
   return { success: true, spriteKey };
 }
 
+function updateTrainerLines(sessionId, waveIndex, twitchUserId, trainerLines) {
+  const session = gameSessions.get(sessionId);
+  if (!session) return { success: false, error: 'Session nicht gefunden' };
+
+  const trainer = session.trainers.get(waveIndex);
+  if (!trainer) return { success: false, error: 'Kein Trainer bei dieser Welle' };
+
+  if (trainer.claimedBy !== twitchUserId) {
+    return { success: false, error: 'Nicht dein Trainer' };
+  }
+
+  if (waveIndex <= session.currentWave + session.config.waveBuffer) {
+    return { success: false, error: 'Zu nah! Kann nicht mehr bearbeitet werden' };
+  }
+
+  const rawLines = trainerLines || { intro: '', victory: '', defeat: '' };
+  trainer.trainerLines = {
+    intro: moderateText(rawLines.intro) ?? '',
+    victory: moderateText(rawLines.victory) ?? '',
+    defeat: moderateText(rawLines.defeat) ?? '',
+  };
+  console.log(`[Chat] Lines updated for wave ${waveIndex}`);
+  return { success: true, trainerLines: trainer.trainerLines };
+}
+
 function toggleAnonymous(sessionId, waveIndex, twitchUserId, anonymous) {
   const session = gameSessions.get(sessionId);
   if (!session) return { success: false, error: 'Session nicht gefunden' };
@@ -1146,6 +1171,7 @@ module.exports = {
   unclaimTrainer,
   editTeam,
   changeSprite,
+  updateTrainerLines,
   claimPokemon,
 
   // Data
