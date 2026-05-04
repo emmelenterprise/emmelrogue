@@ -23,6 +23,8 @@ interface RaceState {
   respawnOnWipe: boolean;
   shinyMode: string;
   luckLevel: number;
+  /** Race-Override fuer Player-Level-Cap-Multiplier. null = Settings-Default greift. */
+  levelCapMultiplier: number | null;
   caughtBiomes: Set<number>;
   wipeCount: number;
 }
@@ -51,6 +53,7 @@ interface UrlRaceParams {
   respawnOnWipe: boolean;
   shinyMode: string;
   luckLevel: number;
+  levelCapMultiplier: number | null;
 }
 
 function readUrlParams(): UrlRaceParams {
@@ -81,8 +84,10 @@ function readUrlParams(): UrlRaceParams {
   const respawnOnWipe = params.get("respawn") === "1";
   const shinyMode = params.get("shiny") || "off";
   const luckLevel = parseInt(params.get("luck") || "-1", 10);
+  const levelCapRaw = params.get("levelCap");
+  const levelCapMultiplier = levelCapRaw && !Number.isNaN(parseFloat(levelCapRaw)) ? parseFloat(levelCapRaw) : null;
 
-  return { code, player, twitchId, seed, starterMode, starters, gameMode, winCondition, winWave, cameraEnabled, cameraDeviceId, nuzlockeDeath, nuzlockeCatch, starterCount, respawnOnWipe, shinyMode, luckLevel };
+  return { code, player, twitchId, seed, starterMode, starters, gameMode, winCondition, winWave, cameraEnabled, cameraDeviceId, nuzlockeDeath, nuzlockeCatch, starterCount, respawnOnWipe, shinyMode, luckLevel, levelCapMultiplier };
 }
 
 // Eagerly initialize state from URL params so isRaceMode() works synchronously
@@ -110,6 +115,7 @@ let state: RaceState | null =
         respawnOnWipe: urlParams.respawnOnWipe,
         shinyMode: urlParams.shinyMode,
         luckLevel: urlParams.luckLevel,
+        levelCapMultiplier: urlParams.levelCapMultiplier,
         caughtBiomes: new Set(),
         wipeCount: 0,
       }
@@ -293,6 +299,11 @@ export const raceManager = {
 
   getLuckLevel(): number {
     return state?.luckLevel ?? -1;
+  },
+
+  /** Race-Override fuer Player-Level-Cap-Multiplier; null falls keine Race-Auswahl. */
+  getLevelCapMultiplier(): number | null {
+    return state?.levelCapMultiplier ?? null;
   },
 
   hasCaughtInBiome(biomeId: number): boolean {

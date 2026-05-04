@@ -2131,9 +2131,12 @@ export class BattleScene extends SceneBase {
 
     const waveIndex = Math.ceil((this.currentBattle?.waveIndex || 1) / 10) * 10;
     const difficultyWaveIndex = this.gameMode.getWaveForDifficulty(waveIndex);
-    // Multiplier: aktive LevelCapDifficultyChallenge ueberschreibt den Settings-Default
-    const multHolder = new NumberHolder(this.levelCapMultiplier);
-    applyChallenges(ChallengeType.LEVEL_CAP_MULTIPLIER, multHolder);
+    // Multiplier-Priority: Race-URL-Override > Challenge > Settings-Default.
+    const raceMult = raceManager.getLevelCapMultiplier();
+    const multHolder = new NumberHolder(raceMult ?? this.levelCapMultiplier);
+    if (raceMult === null) {
+      applyChallenges(ChallengeType.LEVEL_CAP_MULTIPLIER, multHolder);
+    }
     const baseLevel = (1 + difficultyWaveIndex / 2 + Math.pow(difficultyWaveIndex / 25, 2)) * multHolder.value;
     return Math.ceil(baseLevel / 2) * 2 + 2;
   }

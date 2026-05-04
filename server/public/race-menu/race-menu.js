@@ -24,6 +24,7 @@ const respawnWipeCb = document.getElementById('respawn-wipe');
 const respawnLabel = document.getElementById('respawn-label');
 const shinyModeSelect = document.getElementById('shiny-mode-select');
 const luckLevelSelect = document.getElementById('luck-level-select');
+const levelCapSelect = document.getElementById('level-cap-select');
 
 // Performance
 const perfQuality = document.getElementById('perf-quality');
@@ -98,6 +99,7 @@ let chatSessionFromUrl = '';
     respawnWipeCb.disabled = false;
     shinyModeSelect.disabled = false;
     luckLevelSelect.disabled = false;
+    levelCapSelect.disabled = false;
   }
 
   // Restore last settings from localStorage (host only)
@@ -115,6 +117,7 @@ let chatSessionFromUrl = '';
       if (saved.respawnOnWipe !== undefined) respawnWipeCb.checked = saved.respawnOnWipe;
       if (saved.shinyMode) shinyModeSelect.value = saved.shinyMode;
       if (saved.luckLevel !== undefined) luckLevelSelect.value = saved.luckLevel;
+      if (saved.levelCap !== undefined) levelCapSelect.value = saved.levelCap;
       updateStarterCountVisibility();
       updateWaveFieldVisibility();
       // Send config after socket has joined the race (1s delay for safety)
@@ -132,6 +135,7 @@ let chatSessionFromUrl = '';
           respawnOnWipe: respawnWipeCb.checked,
           shinyMode: shinyModeSelect.value,
           luckLevel: parseInt(luckLevelSelect.value),
+          levelCap: levelCapSelect.value,
         });
       }, 1000);
     } catch {}
@@ -261,6 +265,7 @@ function connectSocket() {
       if (data.respawnOnWipe) params.set('respawn', '1');
       if (data.shinyMode && data.shinyMode !== 'off') params.set('shiny', data.shinyMode);
       if (data.luckLevel !== undefined && data.luckLevel !== -1) params.set('luck', String(data.luckLevel));
+      if (data.levelCap) params.set('levelCap', String(data.levelCap));
 
       // Pass camera settings
       const camEnabled = cameraEnabled.checked;
@@ -383,6 +388,7 @@ function updateRulesUI(state) {
     respawnWipeCb.checked = !!state.respawnOnWipe;
     shinyModeSelect.value = state.shinyMode || 'off';
     luckLevelSelect.value = String(state.luckLevel !== undefined ? state.luckLevel : -1);
+    levelCapSelect.value = state.levelCap || '';
     // Map server winCondition+winWave to select preset
     setWinConditionUI(state.winCondition || 'wave', state.winWave || 20);
   }
@@ -401,6 +407,7 @@ function updateRulesFromData(data) {
     if (data.respawnOnWipe !== undefined) respawnWipeCb.checked = !!data.respawnOnWipe;
     if (data.shinyMode !== undefined) shinyModeSelect.value = data.shinyMode;
     if (data.luckLevel !== undefined) luckLevelSelect.value = String(data.luckLevel);
+    if (data.levelCap !== undefined) levelCapSelect.value = String(data.levelCap || '');
     if (data.winCondition) setWinConditionUI(data.winCondition, data.winWave || 20);
   }
   updateWaveFieldVisibility();
@@ -472,6 +479,7 @@ function saveRaceSettings() {
       respawnOnWipe: respawnWipeCb.checked,
       shinyMode: shinyModeSelect.value,
       luckLevel: luckLevelSelect.value,
+      levelCap: levelCapSelect.value,
     }));
   } catch {}
 }
