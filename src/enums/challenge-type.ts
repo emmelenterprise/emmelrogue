@@ -111,4 +111,9 @@ export enum ChallengeType {
    * @see {@linkcode Challenge.applyPermanentFaint}
    */
   PREVENT_REVIVE,
+  /**
+   * Modifies den Player-Level-Cap-Multiplier (Default 1.1, Stufen via LevelCapDifficultyChallenge)
+   * @see {@linkcode Challenge.applyLevelCapMultiplier}
+   */
+  LEVEL_CAP_MULTIPLIER,
 }

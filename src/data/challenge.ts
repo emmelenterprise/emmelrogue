@@ -301,6 +301,15 @@ export abstract class Challenge {
   }
 
   /**
+   * Modifies den Player-Level-Cap-Multiplier (Wert wird in baseLevel-Formel multipliziert).
+   * @param multiplier - NumberHolder mit dem aktuellen Multiplier
+   * @returns Whether this function did anything
+   */
+  applyLevelCapMultiplier(multiplier: NumberHolder): boolean {
+    return false;
+  }
+
+  /**
    * Modifies the number of move slots an AI Pokemon can have.
    * @param pokemon - The Pokémon that is being considered
    * @param moveSlots - The amount of move slots
@@ -1233,6 +1242,57 @@ export class PassivesChallenge extends Challenge {
 }
 
 /**
+ * Player-Level-Cap-Multiplier-Challenge.
+ * 4 Stufen: 0=Locked (1.0), 1=Normal (1.1), 2=Easy (1.2), 3=Brutal (1.4).
+ * Default-Severity 1 (= Normal). Greift global statt Setting-Wert wenn ausgewählt.
+ */
+export class LevelCapDifficultyChallenge extends Challenge {
+  // 0 = Off (Settings-Default), 1 = Locked, 2 = Normal, 3 = Easy, 4 = Brutal
+  private static readonly MULTIPLIERS = [1.1, 1.0, 1.1, 1.2, 1.4];
+  private static readonly VALUE_LABELS = ["Aus", "Gesperrt", "Normal", "Easy", "Brutal"];
+  private static readonly DESC = [
+    "Aus — Settings-Default wird genutzt (Normal +10%).",
+    "Gesperrt — Pokemon-Level = Enemy-Level (kein Puffer).",
+    "Normal — bis +10% über Enemy-Level. Default.",
+    "Easy — bis +20% über Enemy-Level (alter Default).",
+    "Brutal — bis +40% über Enemy-Level.",
+  ];
+
+  constructor() {
+    super(Challenges.LEVEL_CAP_DIFFICULTY, 4);
+  }
+
+  getMultiplier(): number {
+    return LevelCapDifficultyChallenge.MULTIPLIERS[this.value] ?? 1.1;
+  }
+
+  override getName(): string {
+    return "Level Cap";
+  }
+
+  override getValue(overrideValue: number = this.value): string {
+    return LevelCapDifficultyChallenge.VALUE_LABELS[overrideValue] ?? "Aus";
+  }
+
+  override getDescription(overrideValue: number = this.value): string {
+    return LevelCapDifficultyChallenge.DESC[overrideValue] ?? LevelCapDifficultyChallenge.DESC[0];
+  }
+
+  override applyLevelCapMultiplier(multiplier: NumberHolder): boolean {
+    if (this.value === 0) return false;  // Off — Settings-Default greift
+    multiplier.value = this.getMultiplier();
+    return true;
+  }
+
+  static override loadChallenge(source: LevelCapDifficultyChallenge | any): LevelCapDifficultyChallenge {
+    const c = new LevelCapDifficultyChallenge();
+    c.value = source.value;
+    c.severity = source.severity;
+    return c;
+  }
+}
+
+/**
  * @param source - A challenge to copy, or an object of a challenge's properties. Missing values are treated as defaults.
  * @returns The challenge in question.
  */
@@ -1260,6 +1320,8 @@ export function copyChallenge(source: Challenge | any): Challenge {
       return HardcoreChallenge.loadChallenge(source);
     case Challenges.PASSIVES:
       return PassivesChallenge.loadChallenge(source);
+    case Challenges.LEVEL_CAP_DIFFICULTY:
+      return LevelCapDifficultyChallenge.loadChallenge(source);
   }
   throw new Error("Unknown challenge copied");
 }
@@ -1277,5 +1339,6 @@ export function initChallenges() {
     new PassivesChallenge(),
     new InverseBattleChallenge(),
     new FlipStatChallenge(),
+    new LevelCapDifficultyChallenge(),
   );
 }

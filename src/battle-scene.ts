@@ -41,6 +41,8 @@ import { BattleSpec } from "#enums/battle-spec";
 import { BattleStyle } from "#enums/battle-style";
 import { BattleType } from "#enums/battle-type";
 import { BattlerTagType } from "#enums/battler-tag-type";
+import { ChallengeType } from "#enums/challenge-type";
+import { applyChallenges } from "#utils/challenge-utils";
 import { BiomeId } from "#enums/biome-id";
 import { EaseType } from "#enums/ease-type";
 import { ExpGainsSpeed } from "#enums/exp-gains-speed";
@@ -2129,7 +2131,10 @@ export class BattleScene extends SceneBase {
 
     const waveIndex = Math.ceil((this.currentBattle?.waveIndex || 1) / 10) * 10;
     const difficultyWaveIndex = this.gameMode.getWaveForDifficulty(waveIndex);
-    const baseLevel = (1 + difficultyWaveIndex / 2 + Math.pow(difficultyWaveIndex / 25, 2)) * this.levelCapMultiplier;
+    // Multiplier: aktive LevelCapDifficultyChallenge ueberschreibt den Settings-Default
+    const multHolder = new NumberHolder(this.levelCapMultiplier);
+    applyChallenges(ChallengeType.LEVEL_CAP_MULTIPLIER, multHolder);
+    const baseLevel = (1 + difficultyWaveIndex / 2 + Math.pow(difficultyWaveIndex / 25, 2)) * multHolder.value;
     return Math.ceil(baseLevel / 2) * 2 + 2;
   }
 

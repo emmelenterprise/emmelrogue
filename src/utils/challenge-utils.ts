@@ -270,6 +270,12 @@ export function applyChallenges(
  */
 export function applyChallenges(challengeType: ChallengeType.PREVENT_REVIVE, status: BooleanHolder): boolean;
 
+/**
+ * Apply level-cap-multiplier override (LevelCapDifficultyChallenge).
+ * @param multiplier {@link NumberHolder} der aktuelle Multiplier (Default 1.1).
+ */
+export function applyChallenges(challengeType: ChallengeType.LEVEL_CAP_MULTIPLIER, multiplier: NumberHolder): boolean;
+
 export function applyChallenges(challengeType: ChallengeType, ...args: any[]): boolean {
   let ret = false;
   globalScene.gameMode.challenges.forEach(c => {
@@ -343,6 +349,9 @@ export function applyChallenges(challengeType: ChallengeType, ...args: any[]): b
           break;
         case ChallengeType.PREVENT_REVIVE:
           ret ||= c.applyPreventRevive(args[0]);
+          break;
+        case ChallengeType.LEVEL_CAP_MULTIPLIER:
+          ret ||= c.applyLevelCapMultiplier(args[0]);
           break;
       }
     }
