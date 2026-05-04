@@ -182,6 +182,8 @@ export class BattleScene extends SceneBase {
   public seVolume = 1;
   public uiVolume = 1;
   public gameSpeed = 1;
+  /** Level-Cap Multiplier — siehe Settings "Level Cap". Default 1.1 (Normal). */
+  public levelCapMultiplier = 1.1;
   public damageNumbersMode = 0;
   public reroll = false;
   public shopCursorTarget: number = ShopCursorTarget.REWARDS;
@@ -2127,7 +2129,7 @@ export class BattleScene extends SceneBase {
 
     const waveIndex = Math.ceil((this.currentBattle?.waveIndex || 1) / 10) * 10;
     const difficultyWaveIndex = this.gameMode.getWaveForDifficulty(waveIndex);
-    const baseLevel = (1 + difficultyWaveIndex / 2 + Math.pow(difficultyWaveIndex / 25, 2)) * 1.2;
+    const baseLevel = (1 + difficultyWaveIndex / 2 + Math.pow(difficultyWaveIndex / 25, 2)) * this.levelCapMultiplier;
     return Math.ceil(baseLevel / 2) * 2 + 2;
   }
 

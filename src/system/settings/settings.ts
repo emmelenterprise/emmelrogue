@@ -140,6 +140,7 @@ export interface Setting {
  */
 export const SettingKeys = {
   Game_Speed: "GAME_SPEED",
+  Level_Cap_Difficulty: "LEVEL_CAP_DIFFICULTY",
   HP_Bar_Speed: "HP_BAR_SPEED",
   EXP_Gains_Speed: "EXP_GAINS_SPEED",
   EXP_Party_Display: "EXP_PARTY_DISPLAY",
@@ -200,6 +201,19 @@ for (let i = 0; i < 5; i++) {
  * All Settings not related to controls
  */
 export const Setting: Setting[] = [
+  {
+    key: SettingKeys.Level_Cap_Difficulty,
+    label: "Level Cap",
+    options: [
+      { value: "1.0", label: "Locked (Enemy-Level)" },
+      { value: "1.1", label: "Normal (+10%)" },
+      { value: "1.2", label: "Easy (+20%)" },
+      { value: "1.4", label: "Brutal (+40%)" },
+    ],
+    default: 1, // 1.1 = Normal
+    type: SettingType.GENERAL,
+    clamp: false,
+  },
   {
     key: SettingKeys.Game_Speed,
     label: i18next.t("settings:gameSpeed"),
@@ -766,6 +780,9 @@ export function setSetting(setting: string, value: number): boolean {
   switch (Setting[index].key) {
     case SettingKeys.Game_Speed:
       globalScene.gameSpeed = Number.parseFloat(Setting[index].options[value].value.replace("x", ""));
+      break;
+    case SettingKeys.Level_Cap_Difficulty:
+      globalScene.levelCapMultiplier = Number.parseFloat(Setting[index].options[value].value);
       break;
     case SettingKeys.Master_Volume:
       globalScene.masterVolume = value ? Number.parseInt(Setting[index].options[value].value) * 0.01 : 0;
