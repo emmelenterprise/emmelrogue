@@ -46,13 +46,19 @@ html, body {
 }
 
 /* --- Cam Slot --- */
+/* OBS Overlay Performance Framework (siehe feedback_overlay_performance.md)
+ * KEINE transition auf Layout-Properties (width/flex/grid) — triggert Cam-Jumps + OBS-Render-Reset.
+ * Pflicht: contain + will-change + clip-path damit Reflows isoliert bleiben.
+ */
 .cam-slot {
   width: var(--cam-width);
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
   background: #111;
-  transition: all 300ms ease;
+  contain: layout paint;
+  clip-path: inset(0);
+  will-change: transform;
 }
 
 .cam-slot video {
@@ -62,12 +68,13 @@ html, body {
   transform: scale(var(--cam-zoom, 1));
   transform-origin: center;
   display: block;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
-/* Hide cam slot when no camera is connected */
+/* Hide cam slot when no camera is connected — atomar, NICHT animiert. */
 .cam-slot.no-cam {
-  width: 0;
-  overflow: hidden;
+  display: none;
 }
 
 /* --- Game Slot (remaining width) --- */
@@ -76,7 +83,9 @@ html, body {
   position: relative;
   overflow: hidden;
   background: #000;
-  transition: all 300ms ease;
+  contain: layout paint;
+  clip-path: inset(0);
+  will-change: transform;
 }
 
 .game-slot video {
@@ -85,6 +94,8 @@ html, body {
   object-fit: contain;
   background: #000;
   display: block;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* Game iframe (for player mode — game runs inside) */
@@ -95,6 +106,8 @@ html, body {
   height: 100%;
   border: none;
   z-index: 5;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .game-iframe.hidden {
@@ -283,7 +296,9 @@ html, body {
   position: relative;
   overflow: hidden;
   background: #0f0f14;
-  transition: all 300ms ease;
+  contain: layout paint;
+  clip-path: inset(0);
+  will-change: transform;
 }
 
 .community-slot.hidden {
@@ -294,6 +309,8 @@ html, body {
   width: 100%;
   height: 100%;
   border: none;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* --- Solo Layout: Cam left, Game + Community stacked right --- */
