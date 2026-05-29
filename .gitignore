@@ -53,3 +53,5 @@ coverage
 
 # Script outputs
 ./*.csv
+.env
+.env.production
