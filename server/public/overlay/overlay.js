@@ -56,7 +56,13 @@ const hideHud = params.get('hud') === '0';
 const hideTimer = params.get('timer') !== '1';
 
 // --- Apply layout ---
+// Cam-Jump-Fix: idempotent — derselbe Layout-String löst keinen erneuten Reflow aus
+// (LAYOUT_UPDATE schickt `layout` bei jedem Slider-Tick mit, auch wenn es unverändert ist).
+let _lastAppliedLayout = null;
+const setStyleIfChanged = (el, prop, val) => { if (el && el.style[prop] !== val) el.style[prop] = val; };
 function applyLayout(layout) {
+  if (layout === _lastAppliedLayout) return;
+  _lastAppliedLayout = layout;
   const parts = layout.toUpperCase().split('-');
   const row1Order = (parts[0] || 'CG').trim();
   const row2Order = (parts[1] || 'CG').trim();
@@ -80,15 +86,14 @@ function applyLayout(layout) {
 
       for (let i = 0; i < orderStr.length; i++) {
         const ch = orderStr[i];
-        if (ch === 'C' && camSlot) camSlot.style.order = String(i);
-        if (ch === 'G' && gameSlot) gameSlot.style.order = String(i);
-        if (ch === 'T' && comSlot) comSlot.style.order = String(i);
+        if (ch === 'C' && camSlot) setStyleIfChanged(camSlot, 'order', String(i));
+        if (ch === 'G' && gameSlot) setStyleIfChanged(gameSlot, 'order', String(i));
+        if (ch === 'T' && comSlot) setStyleIfChanged(comSlot, 'order', String(i));
       }
 
       // Hide cam if not in layout
       if (!orderStr.includes('C')) {
-        const camSlot = document.getElementById(`cam-slot-${playerNum}`);
-        if (camSlot) camSlot.style.display = 'none';
+        setStyleIfChanged(document.getElementById(`cam-slot-${playerNum}`), 'display', 'none');
       }
     } else {
       // No T — use simple cam-right class
@@ -531,6 +536,14 @@ socket.on('RACE_ENDED', ({ reason }) => {
 });
 
 // --- Live Layout Updates (from layout editor page) ---
+// Cam-Jump-Fix: CSS-Variable nur setzen wenn sich der Wert WIRKLICH ändert. Ein redundantes
+// setProperty auf :root erzwingt sonst einen vollen Style-Recalc/Reflow → OBS-Render-Reset,
+// selbst wenn der Wert identisch ist (z.B. Preset-Load oder Coupling-Echo sendet denselben Wert).
+function setVarIfChanged(name, value) {
+  const root = document.documentElement;
+  if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
+}
+
 socket.on('LAYOUT_UPDATE', (data) => {
   log('Layout update received');
   const root = document.documentElement;
@@ -540,14 +553,14 @@ socket.on('LAYOUT_UPDATE', (data) => {
   }
   if (data.camW !== undefined) {
     const camW = parseInt(data.camW);
-    root.style.setProperty('--cam-width', camW === 0 ? '0px' : camW + 'px');
+    setVarIfChanged('--cam-width', camW === 0 ? '0px' : camW + 'px');
   }
   if (data.camZoom !== undefined) {
     const zoom = parseInt(data.camZoom);
-    root.style.setProperty('--cam-zoom', String(zoom / 100));
+    setVarIfChanged('--cam-zoom', String(zoom / 100));
   }
   if (data.comW !== undefined) {
-    root.style.setProperty('--community-width', parseInt(data.comW) + 'px');
+    setVarIfChanged('--community-width', parseInt(data.comW) + 'px');
   }
   if (data.g1x !== undefined || data.g1y !== undefined) {
     g1x = parseInt(data.g1x ?? g1x);
@@ -572,7 +585,7 @@ socket.on('LAYOUT_UPDATE', (data) => {
     if (comIframe2) comIframe2.style.transform = (tx || ty) ? `translate(${tx}px, ${ty}px)` : '';
   }
   if (data.gameSplit !== undefined) {
-    document.documentElement.style.setProperty('--game-split', parseInt(data.gameSplit) + '%');
+    setVarIfChanged('--game-split', parseInt(data.gameSplit) + '%');
   }
   if (data.chat !== undefined) {
     const overlayEl = document.getElementById('overlay');

@@ -271,13 +271,29 @@
       socket.emit('LAYOUT_UPDATE', { code: raceCode, ...data });
     }
 
+    // Cam-Jump-Fix: Slider feuern 'input' pro Pixel → ohne Throttle ein Broadcast-Sturm,
+    // jeder ein Flex-Reflow → OBS-Render-Reset (= Kamera springt). Per rAF auf max. EIN
+    // Update pro Frame koaleszieren → glattes Resize statt Sprung. (Werte werden gemerged.)
+    let _pendingUpd = {};
+    let _updScheduled = false;
+    function throttledSend(data) {
+      Object.assign(_pendingUpd, data);
+      if (_updScheduled) return;
+      _updScheduled = true;
+      requestAnimationFrame(() => {
+        _updScheduled = false;
+        const out = _pendingUpd; _pendingUpd = {};
+        sendUpdate(out);
+      });
+    }
+
     function linkSlider(sliderId, valId, key, onChange) {
       const slider = document.getElementById(sliderId);
       const val = document.getElementById(valId);
       slider.addEventListener('input', () => {
         val.value = slider.value;
         if (onChange) onChange(parseInt(slider.value));
-        sendUpdate({ [key]: slider.value });
+        throttledSend({ [key]: slider.value });
       });
       val.addEventListener('change', () => {
         let v = parseInt(val.value) || 0;
@@ -297,13 +313,13 @@
         const newComW = Math.max(0, REMAINING - camW);
         document.getElementById('com-w').value = newComW;
         document.getElementById('com-w-val').value = newComW;
-        sendUpdate({ comW: String(newComW) });
+        throttledSend({ comW: String(newComW) });
       } else {
         const comW = parseInt(document.getElementById('com-w').value) || 0;
         const newCamW = Math.max(0, REMAINING - comW);
         document.getElementById('cam-w').value = newCamW;
         document.getElementById('cam-w-val').value = newCamW;
-        sendUpdate({ camW: String(newCamW) });
+        throttledSend({ camW: String(newCamW) });
       }
       _coupling = false;
     }
