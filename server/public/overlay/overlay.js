@@ -459,19 +459,58 @@ function showFinish(winner, p1, p2) {
 }
 
 function spawnConfetti() {
+  // Cam-Jump-Fix (Spielende): EINE Canvas-Ebene statt 80 gleichzeitig animierter position:fixed-Divs.
+  // 80 frisch promotete Compositing-Layer auf einen Schlag lassen OBS' Browser-Source die GPU-Surface
+  // neu allokieren → Cam-Reset/Sprung (trat bei jedem Sieg mit winner!==0 auf, z.B. wenn der Chat gewinnt).
+  // Ein Canvas = genau 1 Layer, contain:strict, isoliert vom Cam-Slot → kein Reflow, kein Layer-Sturm.
   const colors = ['#a855f7', '#22c55e', '#eab308', '#ef4444', '#3b82f6', '#ec4899', '#fff'];
   const container = document.querySelector('.overlay');
-  for (let i = 0; i < 80; i++) {
-    const el = document.createElement('div');
-    el.className = 'confetti';
-    el.style.left = Math.random() * 100 + 'vw';
-    el.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-    el.style.animationDuration = (2 + Math.random() * 3) + 's';
-    el.style.animationDelay = Math.random() * 1.5 + 's';
-    el.style.width = (6 + Math.random() * 8) + 'px';
-    el.style.height = (4 + Math.random() * 6) + 'px';
-    container.appendChild(el);
+  if (!container || document.getElementById('confetti-canvas')) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'confetti-canvas';
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:60;contain:strict;';
+  container.appendChild(canvas);
+  const ctx = canvas.getContext('2d');
+  const W = (canvas.width = window.innerWidth);
+  const H = (canvas.height = window.innerHeight);
+
+  const pieces = Array.from({ length: 110 }, () => ({
+    x: Math.random() * W,
+    y: -20 - Math.random() * H * 0.6,
+    w: 6 + Math.random() * 8,
+    h: 4 + Math.random() * 6,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    vy: 140 + Math.random() * 220,
+    vx: -50 + Math.random() * 100,
+    rot: Math.random() * Math.PI,
+    vrot: -5 + Math.random() * 10,
+  }));
+
+  const DURATION = 5000;
+  let last = performance.now();
+  const start = last;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    const t = now - start;
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalAlpha = t < DURATION - 1200 ? 1 : Math.max(0, (DURATION - t) / 1200);
+    for (const p of pieces) {
+      p.y += p.vy * dt;
+      p.x += p.vx * dt;
+      p.rot += p.vrot * dt;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (t < DURATION) requestAnimationFrame(frame);
+    else canvas.remove();
   }
+  requestAnimationFrame(frame);
 }
 
 // --- Socket.io ---
