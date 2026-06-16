@@ -733,6 +733,8 @@ function setupUI() {
   });
   document.getElementById('cfg-max-claims').addEventListener('change', sendConfigUpdate);
   document.getElementById('cfg-wave-buffer').addEventListener('change', sendConfigUpdate);
+  document.getElementById('cfg-max-text-length').addEventListener('input', () => applyTextLimit(document.getElementById('cfg-max-text-length').value));
+  document.getElementById('cfg-max-text-length').addEventListener('change', sendConfigUpdate);
   document.getElementById('cfg-surprise').addEventListener('change', sendConfigUpdate);
 
   // Vote start
@@ -1597,6 +1599,8 @@ function updateConfigPanel() {
   document.getElementById('cfg-max-claims').value = sessionConfig.maxClaimsPerPerson || 3;
   document.getElementById('cfg-max-claims-row').style.display = sessionConfig.claimMode === 'limit_per_person' ? '' : 'none';
   document.getElementById('cfg-wave-buffer').value = sessionConfig.waveBuffer;
+  document.getElementById('cfg-max-text-length').value = sessionConfig.maxTextLength || 400;
+  applyTextLimit(sessionConfig.maxTextLength || 400);
 
   // Trigger editor
   const triggerContainer = document.getElementById('trigger-editor');
@@ -1661,6 +1665,15 @@ function updateConfigPanel() {
   }
 }
 
+// Max. Zeichen auf alle Sprüche-Eingabefelder (Claim + Profil) anwenden.
+function applyTextLimit(n) {
+  const lim = Math.max(50, Math.min(2000, parseInt(n) || 400));
+  ['profile-intro', 'profile-victory', 'profile-defeat', 'lines-intro', 'lines-victory', 'lines-defeat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.maxLength = lim;
+  });
+}
+
 function sendConfigUpdate() {
   if (!sessionId) return;
 
@@ -1685,6 +1698,7 @@ function sendConfigUpdate() {
       claimMode: document.getElementById('cfg-claim-mode').value,
       maxClaimsPerPerson: parseInt(document.getElementById('cfg-max-claims').value) || 3,
       waveBuffer: parseInt(document.getElementById('cfg-wave-buffer').value) || 2,
+      maxTextLength: parseInt(document.getElementById('cfg-max-text-length').value) || 400,
       categoryTriggers: Object.keys(categoryTriggers).length > 0 ? categoryTriggers : undefined,
     },
   });

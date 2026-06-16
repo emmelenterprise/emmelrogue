@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "claimMode": "limit_per_person",
-  "maxClaimsPerPerson": 9,
+  "maxClaimsPerPerson": 5,
   "waveBuffer": 2,
   "allowCustomTrainers": true,
   "allowShiny": true,
@@ -141,5 +141,6 @@
     "level_boost": 10,
     "item_rain": 10,
     "luck_boost": 10
-  }
+  },
+  "maxTextLength": 400
 }
