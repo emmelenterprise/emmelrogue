@@ -22,6 +22,13 @@ import { getPokemonSpecies } from "#utils/pokemon-utils";
 import { toCamelCase } from "#utils/strings";
 import i18next from "i18next";
 
+// Trainer-Dialog: config.*Messages sind i18n-Keys (z.B. "dialogue:aceTrainer.encounter.2").
+// initTrainerTypeDialogue schreibt die Keys roh in die Config — hier in echten Text auflösen.
+// Nur key-artige Strings (mit ":") übersetzen; bereits aufgelöster Text bleibt unangetastet.
+function resolveDialogueKeys(msgs?: string[]): string[] {
+  return (msgs ?? []).map((m) => (typeof m === "string" && m.includes(":") ? i18next.t(m) : m));
+}
+
 export class Trainer extends Phaser.GameObjects.Container {
   public config: TrainerConfig;
   public variant: TrainerVariant;
@@ -252,27 +259,30 @@ export class Trainer extends Phaser.GameObjects.Container {
 
   getEncounterMessages(): string[] {
     if (this.overrideEncounterMessages) return this.overrideEncounterMessages;
-    return this.variant
+    const msgs = this.variant
       ? (this.variant === TrainerVariant.DOUBLE
           ? this.config.doubleEncounterMessages
           : this.config.femaleEncounterMessages) || this.config.encounterMessages
       : this.config.encounterMessages;
+    return resolveDialogueKeys(msgs);
   }
 
   getVictoryMessages(): string[] {
     if (this.overrideVictoryMessages) return this.overrideVictoryMessages;
-    return this.variant
+    const msgs = this.variant
       ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleVictoryMessages : this.config.femaleVictoryMessages)
           || this.config.victoryMessages
       : this.config.victoryMessages;
+    return resolveDialogueKeys(msgs);
   }
 
   getDefeatMessages(): string[] {
     if (this.overrideDefeatMessages) return this.overrideDefeatMessages;
-    return this.variant
+    const msgs = this.variant
       ? (this.variant === TrainerVariant.DOUBLE ? this.config.doubleDefeatMessages : this.config.femaleDefeatMessages)
           || this.config.defeatMessages
       : this.config.defeatMessages;
+    return resolveDialogueKeys(msgs);
   }
 
   getPartyTemplate(): TrainerPartyTemplate {
