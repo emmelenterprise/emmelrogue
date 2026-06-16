@@ -1,5 +1,6 @@
 import { timedEventManager } from "#app/global-event-manager";
 import { globalScene } from "#app/global-scene";
+import { showPagedDialogue } from "#app/emmelrogue/paged-dialogue";
 import { modifierTypes } from "#data/data-lists";
 import { getCharVariantFromDialogue } from "#data/dialogue";
 import { BiomeId } from "#enums/biome-id";
@@ -75,11 +76,11 @@ export class TrainerVictoryPhase extends BattlePhase {
 
         const showMessage = () => {
           const originalFunc = showMessageOrEnd;
+          // Lange Community-Sieg-Sprüche seitenweise (klickbar) statt abgeschnitten.
           showMessageOrEnd = () =>
-            globalScene.ui.showDialogue(
+            showPagedDialogue(
               message,
               globalScene.currentBattle.trainer?.getName(TrainerSlot.TRAINER, true),
-              null,
               originalFunc,
             );
 

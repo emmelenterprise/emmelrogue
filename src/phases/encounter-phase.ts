@@ -5,6 +5,7 @@ import { chatTrainers } from "#app/emmelrogue/chat-trainers";
 import { pvpBattle } from "#app/emmelrogue/pvp-battle";
 import { PokemonMove } from "#moves/pokemon-move";
 import { globalScene } from "#app/global-scene";
+import { showPagedDialogue } from "#app/emmelrogue/paged-dialogue";
 import { getPokemonNameWithAffix } from "#app/messages";
 import Overrides from "#app/overrides";
 import { handleTutorial, Tutorial } from "#app/tutorial";
@@ -804,7 +805,8 @@ export class EncounterPhase extends BattlePhase {
           globalScene.currentBattle.waveIndex,
         );
         const showDialogueAndSummon = () => {
-          globalScene.ui.showDialogue(message, trainer?.getName(TrainerSlot.NONE, true), null, () => {
+          // Lange Community-Sprüche seitenweise (klickbar) statt abgeschnitten zeigen.
+          showPagedDialogue(message, trainer?.getName(TrainerSlot.NONE, true), () => {
             globalScene.charSprite.hide().then(() => globalScene.hideFieldOverlay(250).then(() => doSummon()));
           });
         };
